@@ -134,7 +134,7 @@ def init_gui(name: str):
 
     tabControl.pack(expand = 1, fill ="both") 
     
-    button_quit = tkinter.Button(master=root, text="Quit", command=root.destroy)
+    button_quit = tkinter.Button(master=root, text="Quit", command=exit)
     button_quit.pack(side=tkinter.BOTTOM)
     slider = tkinter.Scale(tabs[2], 
                             from_=1, to=len(EPSILONS), 
