@@ -38,9 +38,11 @@ class direction(IntFlag):
     RIGHT = 1,
     UP = 2, 
     DOWN  = 3
+    TOTAL = 4
 
 
 MOVES = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+REWARDS = [-1, -10, None, -1, -1]
 
 @dataclass
 class position:
@@ -53,25 +55,13 @@ class position:
             return
         #initial position is a wall fix
         while(board[self.row][self.col] == cell_type.Wall):
-            self.row += 1 if self.col >= len(board) else 0 
-            self.col = self.col + 1 if self.col < len(board[self.row]) else 0 
+            self.row += 1 if self.col == (len(board) - 1) else 0 
+            self.col = self.col + 1 if self.col+1 < len(board[self.row]) else 0 
             
 
     def __hash__(self):
         return hash(astuple(self))
 
-
-def move(pos: position, dir: direction):
-    new_pos = position(pos.row + MOVES[dir][0], pos.col + MOVES[dir][1]) 
-    #wall collision
-    if board[new_pos.row][new_pos.col] == cell_type.Wall:
-        return -1
-    elif board[new_pos.row][new_pos.col] == cell_type.Teleport:
-        pos = position(TELEPORTS(pos))
-    #optimized range check
-    pos.row += MOVES[dir][0] if abs(pos.row - (len(board)-1)/2) < 4 else 0 
-    pos.col += MOVES[dir][1] if abs(pos.col - (len(board)-1)/2) < 4 else 0
-    
 
 TELEPORTS = {}
 def create_board(size: tuple[int,int], p: list[float]):
@@ -84,6 +74,7 @@ def create_board(size: tuple[int,int], p: list[float]):
         pos = position(row, col)
         
         new_row, new_col = np.random.randint(0, len(board), size=2)
+        #passing board prevents the coordiantes being a wall, really hacky
         TELEPORTS[pos] = position(new_row, new_col, board)  
 
         #loop to find cyclic teleports
@@ -98,7 +89,6 @@ def create_board(size: tuple[int,int], p: list[float]):
             elif next_pos != pos:
                 continue
 
-            print("ERROR: CIRCULAR TELEPORTS")
             new_row, new_col = np.random.randint(0, len(board), size=2)
             del TELEPORTS[pos]
             TELEPORTS.update({pos: position(new_row, new_col, board)})
@@ -106,25 +96,73 @@ def create_board(size: tuple[int,int], p: list[float]):
 
 
     board = np.random.choice(range(cell_type.Total.value),size,p=p)
+    #No real reason for this, but makes things alot easier
+    board[0][0] = cell_type.Regular
     ts = list(map(create_teleport, list(np.ndenumerate(board)))) 
     return board
 
+"""
+How range check works:
+    * valid indices of my board go from 0 to len(board) - 1
+        + if the dimensions of the board are n*n where n is even(i.e 8)
+          the last valid index will be an odd number(7)
+        + instead of checking if the number is both >= 0 and <= 7
+          subtract 7/2 = 3.5 from the index, and if the numbers
+          absolute value is less or equal to 3.5, it's good
+        + if n is odd, let's say 9, valid indices go from 0 to 8
+          this check is simpler
+"""
+def move(pos: position, dir: direction, board):
+    def inrange(x, hi):
+        return abs(x - (hi - 1)/2) < hi/2
 
+    new_pos = position(pos.row, pos.col)
+    #if new pos is a valid position return it, otherwise old pos stays
+    f = lambda s, i: s+i if inrange(s+i, len(board)) else s
+    new_pos.row = f(new_pos.row, MOVES[dir][0])
+    new_pos.col = f(new_pos.col, MOVES[dir][1])
+    #wall collision
+    if board[new_pos.row][new_pos.col] == cell_type.Wall:
+        return -1
+    elif board[new_pos.row][new_pos.col] == cell_type.Teleport:
+        while board[new_pos.row][new_pos.col] == cell_type.Teleport:
+            new_pos = TELEPORTS[new_pos]
+
+    #this is uglier but actually works
+    pos.row, pos.col = new_pos.row, new_pos.col
+    return REWARDS[board[pos.row][pos.col]]
+
+    
 def init_state_values(board):
 
     def state_value(state: int):
-        if state <= cell_type.Wall:
-            return -10*np.random.rand()
-        elif state == cell_type.Wall:
-            return -np.ifn
-        return 0
-
+        return -10*np.random.rand()-1
+    
     v = [[state_value(board[row][col]) for col in range(len(board[row]))] \
             for row in range(len(board))]
     return v
 
+GAMMA = 1
+def update_state_values(board, v):
+    def update_value(row, col, board):
+        pv = []
+        if board[row][col] >= cell_type.Wall:
+            return -np.inf if board[row][col] == cell_type.Wall else 0
+        elif board[row][col] == cell_type.Teleport:
+            pos = position(row, col)
+            tpos = TELEPORTS[pos]
+            return v[tpos.row][tpos.col]
+        for a in range(direction.TOTAL):
+            pos = position(row, col)
+            r = move(pos, a, board)
+            pv.append(r + GAMMA*v[pos.row][pos.col])
+        return max(pv)
+    #using map doesn't work with matrices
+    v = [[update_value(row, col, board) for col in range(len(board[row]))] \
+           for row in range(len(board))]
+    return v
 
-TAB_NAMES = ['Board', 'state_values']
+TAB_NAMES = ['Board', 'State values']
 
 
 def init_gui(name: str):
@@ -157,10 +195,10 @@ def draw_board(board, ax, pos = None, vals = None):
                     for row in range(len(board))]
     ax.imshow(color_grid)
     if vals is not None:
-        vals_text = [[str(f"{v[row][col]:.2f}") for col in range(len(board[row]))]
+        v_text = [[str(f"{v[row][col]:.2f}") for col in range(len(board[row]))]
                      for row in range(len(board))]
         #python3 is lazy, forcing this to run
-        b = list(map(draw_value, repeat(ax), list(np.ndenumerate(vals_text))))
+        b = list(map(draw_value, repeat(ax), list(np.ndenumerate(v_text))))
     
     if pos is not None:
         ax.text(pos.col, pos.row, "X")
@@ -185,12 +223,15 @@ def fig_create(tabs):
     return canvases, figures, axes
 
 board = create_board((8, 8), [0.7, 0.1, 0.1, 0.05, 0.05])
-
+print(TELEPORTS)
 pos = position(0, 0, board)
 root, tabControl, tabs = init_gui("maze-solver")
 canvases, figures, axes = fig_create(tabs)
-v = init_state_values(board)
 draw_board(board, axes[0], pos = pos)
+v = init_state_values(board)
+for i in range(10):
+    v = update_state_values(board, v)
+print(v)
 draw_board(board, axes[1], vals = v) 
 for canvas in canvases:
     canvas.draw()
