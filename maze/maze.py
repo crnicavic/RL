@@ -17,6 +17,21 @@ from dataclasses import dataclass, astuple
 from enum import IntFlag
 
 from itertools import repeat
+"""
+Few disclaimers for making code easier to read:
+    - np.ndenumerate is used to merge 2 for loops into one
+        because it's less indentation
+    - I try really hard to make sure not a single line
+        is longer than 80 characters
+    - never indent a line more than 3 times 
+        * instead of indenting 4 times, I will
+        put the 5th(and 4th) indents in aseparate function
+        or use hacky python tricks, some people call it pythonic
+        * the exception is when it's a simple return statement
+        because putting that into a separate function is pointless
+        and putting the inverse condition in a separate function
+        makes code a little less readable
+"""
 
 class cell_type(IntFlag):
     Regular = 0,
@@ -69,6 +84,45 @@ class position:
     def __hash__(self):
         return hash(astuple(self))
 
+TAB_NAMES = ['Board', 'State values', 'V-Policy', 'Action Values', 'Q-policy', 'V-Policy Iteration']
+
+def init_gui(name: str):
+    #Initialize the GUI
+    root = tkinter.Tk()
+    root.wm_title(str)
+
+    #Create the tabs
+    tabControl = tkinter.ttk.Notebook(root) 
+    tabs = [tkinter.Frame(tabControl) for _ in range(len(TAB_NAMES))]
+
+    for i in range(len(TAB_NAMES)):
+        tabControl.add(tabs[i], text=TAB_NAMES[i])
+
+    tabControl.pack(expand = 1, fill ="both") 
+    
+    button_quit = tkinter.Button(master=root, text="Quit", command=exit)
+    button_quit.pack(side=tkinter.BOTTOM)
+    return root, tabControl, tabs
+
+
+def fig_create(tabs):
+    #Create the Figures and Draw them to a canvas
+    figures = []
+    #multiple of axis is axes, storing all axises? configurations
+    axes = [] 
+
+    rows, cols = 1, 1
+    for i in range(len(TAB_NAMES)):
+        fig, ax = plt.subplots(rows, cols)
+        figures.append(fig)
+        axes.append(ax)
+
+    #Created figures are "connected" to a window canvas
+    canvases = [FigureCanvasTkAgg(figures[i], master=tabs[i]) \
+    for i in range(len(TAB_NAMES))]
+
+    return canvases, figures, axes
+
 
 TELEPORTS = {}
 def create_board(size: tuple[int,int], p: list[float]):
@@ -109,6 +163,34 @@ def create_board(size: tuple[int,int], p: list[float]):
     return board
 
 
+def draw_board(board, ax, pos = None, vals = None):
+
+    #"help" function 
+    def draw_value(ax, tup: tuple[tuple[int, int], str]):
+        (row, col), val = tup
+        ax.text(col-0.2, row, val)
+
+    color_grid = [[COLORS[board[row][col]] for col in range(len(board[row]))] \
+                    for row in range(len(board))]
+    ax.imshow(color_grid)
+    for (row, col), t in list(np.ndenumerate(board)):
+        if t != cell_type.Teleport:
+            continue
+        tp = position(row, col)
+        dest = TELEPORTS[tp]
+        dx, dy = dest.col - tp.col, dest.row - tp.row 
+        ax.arrow(x=tp.col, y=tp.row, dx=dx, dy=dy, width=0.05, color='purple')
+    if vals is not None:
+        strf = lambda n: str(n) if not isinstance(n, float) else f"{n:.2f}"
+        v_text = [[strf(vals[row][col]) for col in range(len(board[row]))] \
+                     for row in range(len(board))]
+        #python3 is lazy, forcing this to run
+        b = list(map(draw_value, repeat(ax), list(np.ndenumerate(v_text))))
+    
+    if pos is not None:
+        ax.text(pos.col, pos.row, "X")
+
+
 """
 How range check works:
     * valid indices of my board go from 0 to len(board) - 1
@@ -145,22 +227,6 @@ def move(pos: position, dir: direction, board):
     return REWARDS[board[pos.row][pos.col]]
 
     
-def init_state_values(board):
-
-    def random_state_value():
-        return -10*np.random.rand()-1
-    
-    def random_action():
-        return np.random.randint(0, direction.TOTAL)
-
-    v = [[random_state_value() for col in range(len(board[row]))] \
-            for row in range(len(board))]
-    
-    s = [[direction(random_action()) for col in range(len(board[row]))] \
-            for row in range(len(board))]
-    return v, s
-
-
 """
 If there is a need for the V(or Q) to converge quicker
 a small modification is to not calculate "pv" for
@@ -175,7 +241,13 @@ because I am certain something will break, if it were a bigger board
 (say a 1000x1000) then the speedup would mean something 
 but currently doesn't
 """
-def value_iteration(board, v, s, eps=0.01, gamma = 1, maxiter=100):
+def value_iteration(board, eps=0.01, gamma = 1, maxiter=100):
+    def random_state_value():
+        return -10*np.random.rand()-1
+    
+    def random_action():
+        return np.random.randint(0, direction.TOTAL)
+
     def update_value(row, col, board, v):
         if board[row][col] >= cell_type.Wall:
             val = -np.inf if board[row][col] == cell_type.Wall else 0
@@ -208,6 +280,13 @@ def value_iteration(board, v, s, eps=0.01, gamma = 1, maxiter=100):
             count += 1
             total += val
         return total/count
+    
+    #initial state values and actions are random
+    v = [[-10*np.random.rand()-1 for col in range(len(board[row]))] \
+            for row in range(len(board))]
+    
+    s = [[direction(random_action()) for col in range(len(board[row]))] \
+            for row in range(len(board))]
 
     old_mean = vmean(v)
     new_mean = old_mean
@@ -222,13 +301,9 @@ def value_iteration(board, v, s, eps=0.01, gamma = 1, maxiter=100):
     return v,s
 
 
-def init_action_values(board):
-    q = [[[-10*np.random.rand()-1 for a in range(direction.TOTAL)] \
-            for col in range(len(board[row]))] for row in range(len(board))]
-    return q
-
-def action_value_iteration(board, q, eps=0.01, gamma=1, maxiter=100): 
-    def fafo(targetpos, board, q):
+def action_value_iteration(board, eps=0.01, gamma=1, maxiter=100): 
+    #look around and find out
+    def lafo(targetpos, board, q):
         ret = [0] * 4
         pos = targetpos
         if board[pos.row][pos.col] >= cell_type.Wall:
@@ -241,7 +316,8 @@ def action_value_iteration(board, q, eps=0.01, gamma=1, maxiter=100):
             if pos == targetpos:
                 ret[a] = -np.inf
                 continue
-            ret[a] = max(q[pos.row][pos.col])
+            #????? calculating q twice - the result seems correct?????
+            ret[a] = r + gamma * max(q[pos.row][pos.col])
         return max(ret)
 
     def update_value(row, col, board, q):
@@ -257,7 +333,7 @@ def action_value_iteration(board, q, eps=0.01, gamma=1, maxiter=100):
         for a in range(direction.TOTAL):
            pos = position(row, col)
            r = move(pos, a, board) 
-           val[a] = r + fafo(pos, board, q)
+           val[a] = r + gamma * lafo(pos, board, q)
 
         return val 
 
@@ -277,6 +353,9 @@ def action_value_iteration(board, q, eps=0.01, gamma=1, maxiter=100):
         return total/count
 
 
+    q = [[[-10*np.random.rand()-1 for a in range(direction.TOTAL)] \
+            for col in range(len(board[row]))] for row in range(len(board))]
+
     old_mean = qmean(q, board)
     new_mean = old_mean
     for it in range(maxiter):
@@ -286,82 +365,83 @@ def action_value_iteration(board, q, eps=0.01, gamma=1, maxiter=100):
             print(f"Q-Iteration Converged after {it} iterations")
             break
         old_mean = new_mean
-    # best action for each state
-    a = [[direction(np.argmax(q[row][col])) for col in range(len(board[row]))] \
+    """
+    Creating matrices as 
+    a = [[0] * len(board)] * len(board)
+    doesnt work for some reason, so I use a comprehension
+    which is way uglier but whatever
+    """
+    #used for plotting
+    a = [[direction(0) for col in range(len(board[row]))] \
             for row in range(len(board))]
-    #the value of that action
-    vals = [[q[row][col][a[row][col]] for col in range(len(board[row]))] \
+    vals = [[0 for col in range(len(board[row]))] \
             for row in range(len(board))]
-
+    for (row, col), t in list(np.ndenumerate(board)):
+        #best action for each state
+        a[row][col] = direction(np.argmax(q[row][col]))
+        #the value of that action
+        vals[row][col] = q[row][col][a[row][col]]
+        if t >= cell_type.Teleport:
+            a[row][col] = None
     return q, a, vals
 
 
-TAB_NAMES = ['Board', 'State values', 'V-Policy', 'Action Values', 'Q-policy']
+def v_policy_iteration(board, gamma=1):
+    #initial policy is random, not using comprehension because it's too long
+    def init_policy(board):
+        pi = [[0 for col in range(len(board[row]))] \
+                for row in range(len(board))]
+        for (row, col), _ in list(np.ndenumerate(board)):
+            pi[row][col] = direction(np.random.randint(0, direction.TOTAL))
+        return pi
+   
+    #not sure how to name this, state value for applied action
+    def state_value(row, col, t, a, v, gamma=1):
+        pv = []
+        if t >= cell_type.Wall:
+            return -np.inf if t == cell_type.Wall else 0
+        elif board[row][col] == cell_type.Teleport:
+            pos = position(row, col)
+            pos = TELEPORTS[pos]
+            return v[pos.row][pos.col]
+        pos = position(row, col)
+        r = move(pos, a, board)
+        return r + gamma * v[pos.row][pos.col]
+            
 
-def init_gui(name: str):
-    #Initialize the GUI
-    root = tkinter.Tk()
-    root.wm_title(str)
+    def evaluate_pi(board, pi, v, gamma=1):
+        for (row, col), t in list(np.ndenumerate(board)):
+            v[row][col] = state_value(row, col, t, pi[row][col], v, gamma)
+        return v
 
-    #Create the tabs
-    tabControl = tkinter.ttk.Notebook(root) 
-    tabs = [tkinter.Frame(tabControl) for _ in range(len(TAB_NAMES))]
+    #take state values and calculate a greedy policy
+    def greedy_policy(board, pi, v, gamma=1):
+        new_pi = [[0 for col in range(len(board[row]))] \
+                for row in range(len(board))]
+        for (row, col), t in np.ndenumerate(board):
+            pv = [state_value(row, col, t, a, v, gamma) \
+                    for a in range(direction.TOTAL)]
+            new_pi[row][col] = direction(np.argmax(pv))
+        return new_pi
+            
 
-    for i in range(len(TAB_NAMES)):
-        tabControl.add(tabs[i], text=TAB_NAMES[i])
+    v = [[-10*np.random.rand()-1 for col in range(len(board[row]))] \
+            for row in range(len(board))]
+    pi = init_policy(board)
 
-    tabControl.pack(expand = 1, fill ="both") 
-    
-    button_quit = tkinter.Button(master=root, text="Quit", command=exit)
-    button_quit.pack(side=tkinter.BOTTOM)
-    return root, tabControl, tabs
-
-
-def draw_board(board, ax, pos = None, vals = None):
-
-    #"help" function 
-    def draw_value(ax, tup: tuple[tuple[int, int], str]):
-        (row, col), val = tup
-        ax.text(col-0.2, row, val)
-
-    color_grid = [[COLORS[board[row][col]] for col in range(len(board[row]))] \
-                    for row in range(len(board))]
-    ax.imshow(color_grid)
-    for (row, col), t in list(np.ndenumerate(board)):
-        if t != cell_type.Teleport:
-            continue
-        tp = position(row, col)
-        dest = TELEPORTS[tp]
-        dx, dy = dest.col - tp.col, dest.row - tp.row 
-        ax.arrow(x=tp.col, y=tp.row, dx=dx, dy=dy, width=0.05, color='purple')
-    if vals is not None:
-        strf = lambda n: str(n) if not isinstance(n, float) else f"{n:.2f}"
-        v_text = [[strf(vals[row][col]) for col in range(len(board[row]))] \
-                     for row in range(len(board))]
-        #python3 is lazy, forcing this to run
-        b = list(map(draw_value, repeat(ax), list(np.ndenumerate(v_text))))
-    
-    if pos is not None:
-        ax.text(pos.col, pos.row, "X")
-
-
-def fig_create(tabs):
-    #Create the Figures and Draw them to a canvas
-    figures = []
-    #multiple of axis is axes, storing all axises? configurations
-    axes = [] 
-
-    rows, cols = 1, 1
-    for i in range(len(TAB_NAMES)):
-        fig, ax = plt.subplots(rows, cols)
-        figures.append(fig)
-        axes.append(ax)
-
-    #Created figures are "connected" to a window canvas
-    canvases = [FigureCanvasTkAgg(figures[i], master=tabs[i]) \
-    for i in range(len(TAB_NAMES))]
-
-    return canvases, figures, axes
+    #emulating a do while loop
+    it = 0
+    while True:
+        v = evaluate_pi(board, pi, v, gamma)
+        new_pi = greedy_policy(board, pi, v, gamma)
+        print(new_pi)
+        print(pi)
+        if pi == new_pi:
+            break
+        pi = new_pi
+        it+=1
+    print(f"V-Policy Iteration converged after {it} iterations")
+    return pi
 
 
 board = create_board((8, 8), [0.6, 0.1, 0.05, 0.2, 0.05])
@@ -369,14 +449,14 @@ pos = position(0, 0, board)
 root, tabControl, tabs = init_gui("maze-solver")
 canvases, figures, axes = fig_create(tabs)
 draw_board(board, axes[0], pos = pos)
-v, s = init_state_values(board)
-v, s = value_iteration(board, v, s)
-q = init_action_values(board)
-q, a, av = action_value_iteration(board, q)
+v, s = value_iteration(board)
+q, a, av = action_value_iteration(board)
+pi_v = v_policy_iteration(board)
 draw_board(board, axes[1], vals = v) 
 draw_board(board, axes[2], vals = s)
 draw_board(board, axes[3], vals = av)
 draw_board(board, axes[4], vals = a)
+draw_board(board, axes[5], vals = pi_v)
 for canvas in canvases:
     canvas.draw()
     canvas.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
