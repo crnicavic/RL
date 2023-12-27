@@ -1,4 +1,4 @@
-#reject OOP, embrace monke
+"""reject OOP, embrace monke"""
 from numpy import random as rand
 import matplotlib.pyplot as plt
 
@@ -23,6 +23,8 @@ Few disclaimers for making code easier to read:
         because it's less indentation
     - I try really hard to make sure not a single line
         is longer than 80 characters
+    - Most return statements aren't necessary but I don't know
+        when python treats an argument as a reference and when it doesn't
     - never indent a line more than 3 times 
         * instead of indenting 4 times, I will
         put the 5th(and 4th) indents in aseparate function
@@ -75,7 +77,7 @@ class position:
         self.col = col
         if board is None:
             return
-        #initial position is a wall fix
+        """initial position is a wall fix"""
         while(board[self.row][self.col] == cell_type.Wall):
             self.row += self.col == (len(board) - 1) if self.row < len(board) else 0 
             self.col = self.col + 1 if self.col+1 < len(board[self.row]) else 0 
@@ -84,14 +86,15 @@ class position:
     def __hash__(self):
         return hash(astuple(self))
 
-TAB_NAMES = ['Board', 'State values', 'V-Policy', 'Action Values', 'Q-policy', 'V-Policy Iteration']
+TAB_NAMES = ['Board', 'State values', 'V-Policy', 'Action Values', 'Q-policy',
+             'V-Policy Iteration', 'Q-Policy Iteration']
 
 def init_gui(name: str):
-    #Initialize the GUI
+    """Initialize the GUI"""
     root = tkinter.Tk()
     root.wm_title(str)
 
-    #Create the tabs
+    """Create the tabs"""
     tabControl = tkinter.ttk.Notebook(root) 
     tabs = [tkinter.Frame(tabControl) for _ in range(len(TAB_NAMES))]
 
@@ -106,9 +109,9 @@ def init_gui(name: str):
 
 
 def fig_create(tabs):
-    #Create the Figures and Draw them to a canvas
+    """Create the Figures and Draw them to a canvas"""
     figures = []
-    #multiple of axis is axes, storing all axises? configurations
+    """multiple of axis is axes, storing all axises? configurations"""
     axes = [] 
 
     rows, cols = 1, 1
@@ -117,7 +120,7 @@ def fig_create(tabs):
         figures.append(fig)
         axes.append(ax)
 
-    #Created figures are "connected" to a window canvas
+    """Created figures are "connected" to a window canvas"""
     canvases = [FigureCanvasTkAgg(figures[i], master=tabs[i]) \
     for i in range(len(TAB_NAMES))]
 
@@ -135,14 +138,14 @@ def create_board(size: tuple[int,int], p: list[float]):
         pos = position(row, col)
         
         new_row, new_col = np.random.randint(0, len(board), size=2)
-        #passing board prevents the coordiantes being a wall, really hacky
+        """passing board prevents the coordiantes being a wall, hacky"""
         TELEPORTS[pos] = position(new_row, new_col, board)  
 
-        #loop to find cyclic teleports
+        """loop to find cyclic teleports"""
         next_pos = pos
-        #way too much indentation
+        """way too much indentation"""
         while board[next_pos.row][next_pos.col] == cell_type.Teleport:
-            #follow the teleport
+            """follow the teleport"""
             next_pos = TELEPORTS[next_pos]
 
             if next_pos not in TELEPORTS:
@@ -157,7 +160,7 @@ def create_board(size: tuple[int,int], p: list[float]):
 
 
     board = np.random.choice(range(cell_type.Total.value),size,p=p)
-    #No real reason for this, but makes things alot easier
+    """No real reason for this, but makes things alot easier"""
     board[0][0] = cell_type.Regular
     ts = list(map(create_teleport, list(np.ndenumerate(board)))) 
     return board
@@ -165,7 +168,7 @@ def create_board(size: tuple[int,int], p: list[float]):
 
 def draw_board(board, ax, pos = None, vals = None):
 
-    #"help" function 
+    """"help" function """
     def draw_value(ax, tup: tuple[tuple[int, int], str]):
         (row, col), val = tup
         ax.text(col-0.2, row, val)
@@ -184,7 +187,7 @@ def draw_board(board, ax, pos = None, vals = None):
         strf = lambda n: str(n) if not isinstance(n, float) else f"{n:.2f}"
         v_text = [[strf(vals[row][col]) for col in range(len(board[row]))] \
                      for row in range(len(board))]
-        #python3 is lazy, forcing this to run
+        """python3 is lazy, forcing this to run"""
         b = list(map(draw_value, repeat(ax), list(np.ndenumerate(v_text))))
     
     if pos is not None:
@@ -207,22 +210,22 @@ def move(pos: position, dir: direction, board):
         return abs(x - (hi - 1)/2) < hi/2
 
     new_pos = position(pos.row, pos.col)
-    #if new pos is a valid position return it, otherwise old pos stays
+    """if new pos is a valid position return it, otherwise old pos stays"""
     f = lambda s, i: s+i if inrange(s+i, len(board)) else s
     new_pos.row = f(new_pos.row, MOVES[dir][0])
     new_pos.col = f(new_pos.col, MOVES[dir][1])
-    #wall collision
+    """wall collision"""
     if board[new_pos.row][new_pos.col] == cell_type.Wall:
         return -np.inf
     elif board[new_pos.row][new_pos.col] == cell_type.Teleport:
         while board[new_pos.row][new_pos.col] == cell_type.Teleport:
             new_pos = TELEPORTS[new_pos]
 
-    #if the position didn't change the agent tried going out of bounds 
+    """if the position didn't change the agent tried going out of bounds""" 
     if new_pos == pos:
         return -np.inf
 
-    #this is uglier but actually works
+    """this is uglier but actually works"""
     pos.row, pos.col = new_pos.row, new_pos.col
     return REWARDS[board[pos.row][pos.col]]
 
@@ -248,6 +251,14 @@ def value_iteration(board, eps=0.01, gamma = 1, maxiter=100):
     def random_action():
         return np.random.randint(0, direction.TOTAL)
 
+    """bellman for v values
+        * if the field it's being calculated for
+        is terminal v=0
+        * if the field is a wall it's -inf because
+        it isn't steppable
+        * if it's a teleport i assigned it the value of
+        the destination field
+    """
     def update_value(row, col, board, v):
         if board[row][col] >= cell_type.Wall:
             val = -np.inf if board[row][col] == cell_type.Wall else 0
@@ -265,12 +276,14 @@ def value_iteration(board, eps=0.01, gamma = 1, maxiter=100):
         maxind = np.argmax(pv)
         return (pv[maxind], direction(maxind))
 
+    """calling that calculates bellman for every field to reduce indentation"""
     def update_state_values(board, v, s, gamma = 1):
-        #using map doesn't work with matrices
+        """using map doesn't work with matrices"""
         for (row, col), _ in list(np.ndenumerate(board)):
             v[row][col], s[row][col] = update_value(row, col, board, v)
         return v, s
 
+    """this is easier to implement the max but the result is the same"""
     def vmean(v):
         total = 0
         count = 0
@@ -281,7 +294,7 @@ def value_iteration(board, eps=0.01, gamma = 1, maxiter=100):
             total += val
         return total/count
     
-    #initial state values and actions are random
+    """initial state values and actions are random"""
     v = [[-10*np.random.rand()-1 for col in range(len(board[row]))] \
             for row in range(len(board))]
     
@@ -302,8 +315,8 @@ def value_iteration(board, eps=0.01, gamma = 1, maxiter=100):
 
 
 def action_value_iteration(board, eps=0.01, gamma=1, maxiter=100): 
-    #look around and find out
-    def lafo(targetpos, board, q):
+    """Calculate state values around the given position"""
+    def lafo(targetpos, board, q, gamma=1):
         ret = [0] * 4
         pos = targetpos
         if board[pos.row][pos.col] >= cell_type.Wall:
@@ -312,15 +325,22 @@ def action_value_iteration(board, eps=0.01, gamma=1, maxiter=100):
         for a in range(direction.TOTAL):
             pos = position(targetpos.row, targetpos.col)
             r = move(pos, a, board)
-            #dont calculate where you came from
+            """dont calculate where you came from"""
             if pos == targetpos:
                 ret[a] = -np.inf
                 continue
-            #????? calculating q twice - the result seems correct?????
+            """????? calculating q twice - the result seems correct?????"""
             ret[a] = r + gamma * max(q[pos.row][pos.col])
         return max(ret)
-
-    def update_value(row, col, board, q):
+    """
+    * if the field it's being calculated for
+    is terminal q=0
+    * if the field is a wall it's -inf because
+    it isn't steppable
+    * if it's a teleport i assigned it the value of
+    the destination field
+    """
+    def update_value(row, col, board, q, gamma=1):
         if board[row][col] >= cell_type.Wall:
             val = -np.inf if board[row][col] == cell_type.Wall else 0
             return [val] * 4
@@ -337,7 +357,7 @@ def action_value_iteration(board, eps=0.01, gamma=1, maxiter=100):
 
         return val 
 
-    def update_action_values(board, q, gamma = 1):
+    def update_q(board, q, gamma = 1):
         for (row, col), _ in list(np.ndenumerate(board)):
             q[row][col] = update_value(row, col, board, q)
         return q
@@ -359,7 +379,7 @@ def action_value_iteration(board, eps=0.01, gamma=1, maxiter=100):
     old_mean = qmean(q, board)
     new_mean = old_mean
     for it in range(maxiter):
-        q = update_action_values(board, q, gamma)
+        q = update_q(board, q, gamma)
         new_mean = qmean(q, board)
         if abs(new_mean - old_mean) < eps:
             print(f"Q-Iteration Converged after {it} iterations")
@@ -371,15 +391,15 @@ def action_value_iteration(board, eps=0.01, gamma=1, maxiter=100):
     doesnt work for some reason, so I use a comprehension
     which is way uglier but whatever
     """
-    #used for plotting
+    """used for plotting"""
     a = [[direction(0) for col in range(len(board[row]))] \
             for row in range(len(board))]
     vals = [[0 for col in range(len(board[row]))] \
             for row in range(len(board))]
     for (row, col), t in list(np.ndenumerate(board)):
-        #best action for each state
+        """best action for each state"""
         a[row][col] = direction(np.argmax(q[row][col]))
-        #the value of that action
+        """the value of that action"""
         vals[row][col] = q[row][col][a[row][col]]
         if t >= cell_type.Teleport:
             a[row][col] = None
@@ -387,7 +407,7 @@ def action_value_iteration(board, eps=0.01, gamma=1, maxiter=100):
 
 
 def v_policy_iteration(board, gamma=1):
-    #initial policy is random, not using comprehension because it's too long
+    """initial policy is random, not using comprehension because it's too long"""
     def init_policy(board):
         pi = [[0 for col in range(len(board[row]))] \
                 for row in range(len(board))]
@@ -395,7 +415,7 @@ def v_policy_iteration(board, gamma=1):
             pi[row][col] = direction(np.random.randint(0, direction.TOTAL))
         return pi
    
-    #not sure how to name this, state value for applied action
+    """not sure how to name this, state value for applied action"""
     def state_value(row, col, t, a, v, gamma=1):
         pv = []
         if t >= cell_type.Wall:
@@ -414,8 +434,9 @@ def v_policy_iteration(board, gamma=1):
             v[row][col] = state_value(row, col, t, pi[row][col], v, gamma)
         return v
 
-    #take state values and calculate a greedy policy
+    """take state values and calculate a greedy policy"""
     def greedy_policy(board, pi, v, gamma=1):
+        """i would love for static to be a thing in python"""
         new_pi = [[0 for col in range(len(board[row]))] \
                 for row in range(len(board))]
         for (row, col), t in np.ndenumerate(board):
@@ -429,13 +450,11 @@ def v_policy_iteration(board, gamma=1):
             for row in range(len(board))]
     pi = init_policy(board)
 
-    #emulating a do while loop
+    """emulating a do while loop"""
     it = 0
     while True:
         v = evaluate_pi(board, pi, v, gamma)
         new_pi = greedy_policy(board, pi, v, gamma)
-        print(new_pi)
-        print(pi)
         if pi == new_pi:
             break
         pi = new_pi
@@ -443,6 +462,72 @@ def v_policy_iteration(board, gamma=1):
     print(f"V-Policy Iteration converged after {it} iterations")
     return pi
 
+def q_policy_iteration(board, gamma=1):
+    def init_policy(board):
+        pi = [[0 for col in range(len(board[row]))] \
+                for row in range(len(board))]
+        for (row, col), _ in list(np.ndenumerate(board)):
+            pi[row][col] = direction(np.random.randint(0, direction.TOTAL))
+        return pi
+    
+    def lafo(targetpos, board, q, gamma=1):
+        ret = [0] * 4
+        pos = targetpos
+        if board[pos.row][pos.col] >= cell_type.Wall:
+            val = -np.inf if board[pos.row][pos.col] == cell_type.Wall else 0
+            return val 
+        for a in range(direction.TOTAL):
+            pos = position(targetpos.row, targetpos.col)
+            r = move(pos, a, board)
+            """dont calculate where you came from"""
+            if pos == targetpos:
+                ret[a] = -np.inf
+                continue
+            """????? calculating q twice - the result seems correct-again?????"""
+            ret[a] = r + gamma * max(q[pos.row][pos.col])
+        return max(ret)
+
+    """this works, but it isn't being calculated with respect to the policy??"""
+    def update_value(row, col, board, a, q, gamma=1):
+        if board[row][col] >= cell_type.Wall:
+            val = -np.inf if board[row][col] == cell_type.Wall else 0
+            return [val] * 4 
+        elif board[row][col] == cell_type.Teleport:
+           pos = position(row, col)
+           tpos = TELEPORTS[pos]
+           return q[tpos.row][tpos.col] 
+        val = []
+        for a in range(direction.TOTAL):
+            pos = position(row, col)
+            r = move(pos, a, board) 
+            val.append(r + gamma * lafo(pos, board, q))
+        return val 
+
+    def evaluate_pi(board, pi, q, gamma=1):
+        for (row, col), a in np.ndenumerate(pi):
+            q[row][col]= update_value(row, col, board, a, q, gamma)
+        return q
+
+    def greedy_policy(board, pi, q, gamma=1):
+        new_pi = [[0 for col in range(len(board[row]))] \
+                for row in range(len(board))]
+        for (row, col), t in np.ndenumerate(board):
+            new_pi[row][col] = direction(np.argmax(q[row][col]))
+        return new_pi
+
+    pi = init_policy(board)
+    q = [[[-10*np.random.rand()-1 for a in range(direction.TOTAL)] \
+            for col in range(len(board[row]))] for row in range(len(board))]
+    it = 0
+    while it < 1000:
+        q = evaluate_pi(board, pi, q, gamma)
+        new_pi = greedy_policy(board, pi, q, gamma)
+        if pi == new_pi:
+            break
+        pi = new_pi
+        it += 1
+    print(f"Q-Policy Iteration converged after {it} iterations")
+    return pi
 
 board = create_board((8, 8), [0.6, 0.1, 0.05, 0.2, 0.05])
 pos = position(0, 0, board)
@@ -452,11 +537,13 @@ draw_board(board, axes[0], pos = pos)
 v, s = value_iteration(board)
 q, a, av = action_value_iteration(board)
 pi_v = v_policy_iteration(board)
+pi_q = q_policy_iteration(board)
 draw_board(board, axes[1], vals = v) 
 draw_board(board, axes[2], vals = s)
 draw_board(board, axes[3], vals = av)
 draw_board(board, axes[4], vals = a)
 draw_board(board, axes[5], vals = pi_v)
+draw_board(board, axes[6], vals = pi_q)
 for canvas in canvases:
     canvas.draw()
     canvas.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
