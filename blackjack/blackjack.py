@@ -141,13 +141,21 @@ def game(deck, plog, dlog):
     return pwin
 
 def form_Q(deck):
-    def experience(turnlog, result):
+    def experience(turnlog, result, gamma=1):
         rewards = [0 for _ in turnlog]
-        rewards[-1] = result 
-        return 0
+        rewards[-1] = result
+        g = [result]
+        for r in rewards[:-1]:
+            g.insert(0, g[0]*gamma) 
+        exp = []
+        for hand, g in zip(turnlog, g):
+            exp.append((hand[0].cards, hand[0].total, hand[1], g))
+        return exp
+
     plog, dlog = [], []
     #if player won, reward is 1 otherwise -1
     result = (game(deck, plog, dlog)) * 2 - 1
+    print(experience(plog[-1], result, 0.9))
     return 0
 
 form_Q(deck)
