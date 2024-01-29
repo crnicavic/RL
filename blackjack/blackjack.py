@@ -35,7 +35,7 @@ class Rank(IntFlag):
     EIGHT=8
     NINE=9
     TEN=10
-    ACE=11 #easier to work with
+    ACE=11 #blackjack hacks
     JACK=12
     QUEEN=13
     KING=14
@@ -60,7 +60,6 @@ class Card:
 class Hand:
     cards: [Card]
     total: int
-    ace: bool   #has ace?
 
     def __hash__():
         return hash(astuple(self))
@@ -81,11 +80,9 @@ def draw(deck, rcpt, count=1):
     for _ in range(count):
         rcpt.cards.append(deck.pop(-1))
         rcpt.total += rcpt.cards[-1].value
-        rcpt.ace = rcpt.cards[-1].value == 11
 
 
 def hold(deck, rcpt, count=1):
-
     return 0
         
 
@@ -93,12 +90,12 @@ ACTIONS = [draw, hold]
 
 
 def deal(deck):
-    dealer = Hand([], 0, False)
+    dealer = Hand([], 0)
     #dealer draws 2 cards but only one of them will be visible to the player
     draw(deck, dealer, count=2)
 
     #making it an array for handling splitting
-    player = [Hand([], 0, False)]
+    player = [Hand([], 0)]
     draw(deck, player[0], count=2)
     return dealer, player
 
@@ -107,25 +104,40 @@ def deal(deck):
 def player_pi(hand):
     return np.random.rand() < 0.5
 
+
 #HIT = 0, HOLD = 1, simple
 def dealer_pi(hand):
     return hand.total > 17
 
+
 #random constant
-BUST = 0xFFFF
+BUST = 0xDEADBEEF
 deck = deck_init()
 def game(deck, plog, dlog):
+
+    #reduce the value of an ace if the player is about to bust
+    def ace_reduce(hand):
+        if hand.total <= 21:
+            return
+        c_id = 0
+        while hand.total > 21 and c_id < len(hand.cards):
+            card = hand.cards[c_id]
+            hand.total -= 10 if card.value == 11 else 0
+            card.value -= 10 if card.value == 11 else 0
+            c_id += 1
+
     def play_turn(deck, policy, hand):
         stop = hand.total >= 21
         log = []
         while not stop:
             a = int(policy(hand))
-            log.append((copy.copy(hand), a))
+            log.append((copy.deepcopy(hand), a))
             ACTIONS[a](deck, hand)
-            hand.total -= 10 * ((hand.ace) and (hand.total > 21))
+            ace_reduce(hand)
             stop = hand.total >= 21 or a != 0
         a = a if hand.total <= 21 else BUST
-        log.append((copy.copy(hand), a))
+        if a == BUST:
+            log.append((copy.copy(hand), a))
         return log
 
     #pt - player total, dt - dealer total
@@ -137,8 +149,15 @@ def game(deck, plog, dlog):
     dealer, player = deal(deck)
     plog.append(play_turn(deck, player_pi, player[0]))
     dlog.append(play_turn(deck, dealer_pi, dealer))
+    #function isn't necessary but makes stuff more readable
     pwin = winner(player[0].total, dealer.total)
     return pwin
+
+@dataclass
+class sag():
+    state: Hand
+    action: int
+    gain: float
 
 def form_Q(deck):
     def experience(turnlog, result, gamma=1):
@@ -148,14 +167,15 @@ def form_Q(deck):
         for r in rewards[:-1]:
             g.insert(0, g[0]*gamma) 
         exp = []
-        for hand, g in zip(turnlog, g):
-            exp.append((hand[0].cards, hand[0].total, hand[1], g))
+        for (hand, a), g in zip(turnlog, g):
+            exp.append(sag(hand, a, g))
         return exp
 
+    Q = dict(Hand, tuple[list[float], list[float]])
     plog, dlog = [], []
     #if player won, reward is 1 otherwise -1
-    result = (game(deck, plog, dlog)) * 2 - 1
-    print(experience(plog[-1], result, 0.9))
+    result = int(game(deck, plog, dlog)) * 2 - 1
+    print(*experience(plog[-1], result, 0.9), sep="\n")       
     return 0
 
 form_Q(deck)
