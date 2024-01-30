@@ -68,7 +68,7 @@ class Hand:
 DECK_COUNT = 1
 def deck_init(deck_count=1):
     #limit
-    l = lambda r : r if r < 10 else 10
+    l = lambda r : r if r <= 11 else 10
     deck = [Card(l(rank), suit) for rank in range(Rank.TWO, Rank.RANK_TOTAL) \
             for suit in range(Suit.SUIT_TOTAL) for _ in range(DECK_COUNT)]
     np.random.shuffle(deck)
@@ -90,30 +90,26 @@ ACTIONS = [draw, hold]
 
 
 def deal(deck):
+    
+    def ace(hand):
+        ace = [card.value == 11 for card in hand.cards]
+        return True in ace
+
     dealer = Hand([], 0)
     #dealer draws 2 cards but only one of them will be visible to the player
     draw(deck, dealer, count=2)
 
-    #making it an array for handling splitting
+    soft17 = False
+    if dealer.total == 17 and ace(dealer):
+        soft17 = True
+
+    #making it an array incase I want to add spliting
     player = [Hand([], 0)]
     draw(deck, player[0], count=2)
-    return dealer, player
-
+    return dealer, player, soft17
 
 #player policy, hand = state
 def player_pi(hand):
-    return np.random.rand() < 0.5
-
-
-#HIT = 0, HOLD = 1, simple
-def dealer_pi(hand):
-    return hand.total > 17
-
-
-#random constant
-BUST = 0xDEADBEEF
-deck = deck_init()
-def game(deck, plog, dlog):
 
     #reduce the value of an ace if the player is about to bust
     def ace_reduce(hand):
@@ -126,38 +122,66 @@ def game(deck, plog, dlog):
             card.value -= 10 if card.value == 11 else 0
             c_id += 1
 
-    def play_turn(deck, policy, hand):
-        stop = hand.total >= 21
-        log = []
-        while not stop:
-            a = int(policy(hand))
-            log.append((copy.deepcopy(hand), a))
-            ACTIONS[a](deck, hand)
-            ace_reduce(hand)
-            stop = hand.total >= 21 or a != 0
-        a = a if hand.total <= 21 else BUST
-        if a == BUST:
-            log.append((copy.copy(hand), a))
-        return log
+    ace = ace_reduce(hand)
+    return np.random.rand() < 0.5 if hand.total < 21 else 1
+
+
+#HIT = 0, HOLD = 1, simple
+def dealer_pi(hand, soft17=False):
+    return int(hand.total >= 17 and not soft17)
+
+class Result(IntFlag):
+    dwin = -1
+    push = 0   #slang for draw
+    pwin = 1
+
+
+#TODO: ACE REDUCE WILL NEVER BE EXECUTED DUE TO SHIT LOOP, should work now
+def play_turn(deck, policy, hand):
+    stop = hand.total >= 21
+    log = []
+    a = int(policy(hand))
+    while True:
+        log.append((copy.deepcopy(hand), a))
+        ACTIONS[a](deck, hand)
+        #a can change only from hit to hold, necessary for stochastic policies
+        a = int(policy(hand)) + int(a - 1 >= 0)
+        stop = hand.total >= 21 or a != 0
+        if stop:
+            break
+
+    #NOTE: The log will be empty in case of a natural blackjack        
+    return log
+
+
+deck = deck_init()
+def episode(deck, plog, dlog):
 
     #pt - player total, dt - dealer total
     def winner(pt, dt):
-        #if the player doesn't win, he loses, VEGAS BABY
-        pwin = (pt == 21) or (pt < 21 and pt > dt) or (pt < 21 and dt > 21)
-        return pwin
+        #player won?
+        result = Result(int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21)))
+        #if it's not a draw, the dealer won
+        result = Result.dwin if result == 0 and pt != dt else result
+        return result
 
     dealer, player = deal(deck)
-    plog.append(play_turn(deck, player_pi, player[0]))
-    dlog.append(play_turn(deck, dealer_pi, dealer))
-    #function isn't necessary but makes stuff more readable
-    pwin = winner(player[0].total, dealer.total)
-    return pwin
+    #there is nothing to learn from a natural 21, except that someone is lucky
+    if dealer.total < 21 and player[0].total < 21:
+        plog.append(play_turn(deck, player_pi, player[0]))
+        dlog.append(play_turn(deck, dealer_pi, dealer))
+    result = winner(player[0].total, dealer.total)
+    print("---------GAME INFO----------")
+    print(f"player total = {player[0].total}")
+    print(f"dealer total = {dealer.total}")
 
-@dataclass
-class sag():
-    state: Hand
-    action: int
-    gain: float
+    print(f"RESULT: {result}")
+    print(f"Player log: {plog}")
+    print(f"Dealer log: {dlog}\n")
+
+    return result
+
+
 
 def form_Q(deck):
     def experience(turnlog, result, gamma=1):
@@ -168,14 +192,15 @@ def form_Q(deck):
             g.insert(0, g[0]*gamma) 
         exp = []
         for (hand, a), g in zip(turnlog, g):
-            exp.append(sag(hand, a, g))
+            exp.append((hand, a, g))
         return exp
 
-    Q = dict(Hand, tuple[list[float], list[float]])
+    G = dict[Hand, tuple[list[float], list[float]]]
     plog, dlog = [], []
     #if player won, reward is 1 otherwise -1
-    result = int(game(deck, plog, dlog)) * 2 - 1
-    print(*experience(plog[-1], result, 0.9), sep="\n")       
-    return 0
+    result = episode(deck, plog, dlog)
+    if plog:
+        ep = experience(plog[-1], result, 0.9)
+        print(*ep, sep="\n")       
 
 form_Q(deck)
