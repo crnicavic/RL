@@ -96,7 +96,6 @@ def deal(deck):
         return True in ace
 
     dealer = Hand([], 0)
-    #dealer draws 2 cards but only one of them will be visible to the player
     draw(deck, dealer, count=2)
 
     soft17 = False
@@ -106,7 +105,7 @@ def deal(deck):
     #making it an array incase I want to add spliting
     player = [Hand([], 0)]
     draw(deck, player[0], count=2)
-    return dealer, player, soft17
+    return dealer, player
 
 #player policy, hand = state
 def player_pi(hand):
@@ -154,7 +153,7 @@ def play_turn(deck, policy, hand):
     return log
 
 
-deck = deck_init()
+deck = deck_init(6)
 def episode(deck, plog, dlog):
 
     #pt - player total, dt - dealer total
@@ -183,24 +182,30 @@ def episode(deck, plog, dlog):
 
 
 
-def form_Q(deck):
-    def experience(turnlog, result, gamma=1):
+def form_G(deck):
+    #turn logs -> experience, calling it exp is a little confusing
+    def logs2xp(turnlog, result, gamma=1):
         rewards = [0 for _ in turnlog]
         rewards[-1] = result
         g = [result]
         for r in rewards[:-1]:
             g.insert(0, g[0]*gamma) 
-        exp = []
+        xp = []
         for (hand, a), g in zip(turnlog, g):
-            exp.append((hand, a, g))
-        return exp
+            xp.append((hand, a, g))
+        return xp
 
-    G = dict[Hand, tuple[list[float], list[float]]]
+    G: dict[int, tuple[list[float], list[float]]] = {}
     plog, dlog = [], []
     #if player won, reward is 1 otherwise -1
     result = episode(deck, plog, dlog)
     if plog:
-        ep = experience(plog[-1], result, 0.9)
-        print(*ep, sep="\n")       
+        ep = logs2xp(plog[-1], result, 0.9)
+        print(*ep, sep="\n")
+        for hand, a, g in ep:
+            if hand.total not in G:
+                G[hand.total] = ([], [])
+            G[hand.total][a].append(g)
+            print(G)     
 
-form_Q(deck)
+form_G(deck)
