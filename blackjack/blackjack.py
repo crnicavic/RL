@@ -64,13 +64,11 @@ class Hand:
     def __hash__():
         return hash(astuple(self))
 
-
-DECK_COUNT = 1
 def deck_init(deck_count=1):
     #limit
     l = lambda r : r if r <= 11 else 10
     deck = [Card(l(rank), suit) for rank in range(Rank.TWO, Rank.RANK_TOTAL) \
-            for suit in range(Suit.SUIT_TOTAL) for _ in range(DECK_COUNT)]
+            for suit in range(Suit.SUIT_TOTAL) for _ in range(deck_count)]
     np.random.shuffle(deck)
     return deck
 
@@ -86,21 +84,18 @@ def hold(deck, rcpt, count=1):
     return 0
         
 
+#emulating function pointers
 ACTIONS = [draw, hold]
 
 
 def deal(deck):
     
-    def ace(hand):
-        ace = [card.value == 11 for card in hand.cards]
-        return True in ace
+
 
     dealer = Hand([], 0)
     draw(deck, dealer, count=2)
 
-    soft17 = False
-    if dealer.total == 17 and ace(dealer):
-        soft17 = True
+
 
     #making it an array incase I want to add spliting
     player = [Hand([], 0)]
@@ -117,7 +112,7 @@ def player_pi(hand):
         c_id = 0
         while hand.total > 21 and c_id < len(hand.cards):
             card = hand.cards[c_id]
-            hand.total -= 10 if card.value == 11 else 0
+            hand.total -= 10 if card.value == 11 else 0 #BLACJACK HAX
             card.value -= 10 if card.value == 11 else 0
             c_id += 1
 
@@ -126,7 +121,15 @@ def player_pi(hand):
 
 
 #HIT = 0, HOLD = 1, simple
-def dealer_pi(hand, soft17=False):
+def dealer_pi(hand):
+    def ace(hand):
+        ace = [card.value == 11 for card in hand.cards]
+        return True in ace
+    
+    soft17 = False
+    if hand.total == 17 and ace(hand):
+        soft17 = True
+
     return int(hand.total >= 17 and not soft17)
 
 class Result(IntFlag):
@@ -135,7 +138,7 @@ class Result(IntFlag):
     pwin = 1
 
 
-#TODO: ACE REDUCE WILL NEVER BE EXECUTED DUE TO SHIT LOOP, should work now
+#TODO: ACE REDUCE WILL NEVER BE EXECUTED DUE TO SHIT LOOP, should work now?
 def play_turn(deck, policy, hand):
     stop = hand.total >= 21
     log = []
@@ -153,59 +156,56 @@ def play_turn(deck, policy, hand):
     return log
 
 
-deck = deck_init(6)
 def episode(deck, plog, dlog):
 
     #pt - player total, dt - dealer total
     def winner(pt, dt):
         #player won?
         result = Result(int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21)))
-        #if it's not a draw, the dealer won
+        #if it's not a draw, the dealer won, TODO: do this without branching
         result = Result.dwin if result == 0 and pt != dt else result
         return result
 
     dealer, player = deal(deck)
-    #there is nothing to learn from a natural 21, except that someone is lucky
     if dealer.total < 21 and player[0].total < 21:
         plog.append(play_turn(deck, player_pi, player[0]))
         dlog.append(play_turn(deck, dealer_pi, dealer))
+    else:
+        plog.append([])
+        dlog.append([])
     result = winner(player[0].total, dealer.total)
     print("---------GAME INFO----------")
     print(f"player total = {player[0].total}")
     print(f"dealer total = {dealer.total}")
 
     print(f"RESULT: {result}")
-    print(f"Player log: {plog}")
-    print(f"Dealer log: {dlog}\n")
+    print(f"Player log: {plog[-1]}")
+    print(f"Dealer log: {dlog[-1]}\n")
 
     return result
 
 
-
-def form_G(deck):
+def gatherxp(deck, count=10):
     #turn logs -> experience, calling it exp is a little confusing
     def logs2xp(turnlog, result, gamma=1):
+        xp = []
+        #natural blackjack creates an empty log, nothing to learn from that
+        if not turnlog:
+            return xp
         rewards = [0 for _ in turnlog]
         rewards[-1] = result
         g = [result]
         for r in rewards[:-1]:
             g.insert(0, g[0]*gamma) 
-        xp = []
         for (hand, a), g in zip(turnlog, g):
             xp.append((hand, a, g))
         return xp
 
-    G: dict[int, tuple[list[float], list[float]]] = {}
     plog, dlog = [], []
-    #if player won, reward is 1 otherwise -1
-    result = episode(deck, plog, dlog)
-    if plog:
-        ep = logs2xp(plog[-1], result, 0.9)
-        print(*ep, sep="\n")
-        for hand, a, g in ep:
-            if hand.total not in G:
-                G[hand.total] = ([], [])
-            G[hand.total][a].append(g)
-            print(G)     
+    #play out all the episodes
+    for _ in range(count):
+        result = episode(deck, plog, dlog)
+    ep = [logs2xp(turnlog, result, 0.9) for turnlog in plog]
 
-form_G(deck)
+deck = deck_init(6)
+gatherxp(deck)
