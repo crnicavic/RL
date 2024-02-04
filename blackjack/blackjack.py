@@ -1,4 +1,11 @@
-"""reject OOP, embrace monke"""
+"""
+reject OOP, embrace monke
+- Let it be clear i regret this statement, classes would have made this so much easier
+- The base of the simulator and learning is very simple and i think good
+    but adding hacks to make optotals and ace_reducers work ruined everything
+    which could have been avoided by using classes
+    * which doesn't change the fact that I hate them
+"""
 from numpy import random as rand
 import matplotlib.pyplot as plt
 
@@ -57,9 +64,10 @@ class Card:
 
 
 @dataclass
-class Hand:
+class State:
     cards: [Card]
     total: int
+    optotal: int    #a hack that wont break anything but will cause problems 
 
     def __hash__():
         return hash(astuple(self))
@@ -70,6 +78,7 @@ def deck_init(deck_count=1):
     deck = [Card(l(rank), suit) for rank in range(Rank.TWO, Rank.RANK_TOTAL) \
             for suit in range(Suit.SUIT_TOTAL) for _ in range(deck_count)]
     np.random.shuffle(deck)
+    cut = len(deck) // 5
     return deck
 
 
@@ -89,48 +98,42 @@ ACTIONS = [draw, hold]
 
 
 def deal(deck):
-    
-
-
-    dealer = Hand([], 0)
+    dealer = State([], 0, 0)
     draw(deck, dealer, count=2)
 
-
-
     #making it an array incase I want to add spliting
-    player = [Hand([], 0)]
+    player = [State([], 0, 0)]
     draw(deck, player[0], count=2)
+
     return dealer, player
 
-#player policy, hand = state
-def player_pi(hand):
-
     #reduce the value of an ace if the player is about to bust
-    def ace_reduce(hand):
-        if hand.total <= 21:
-            return
-        c_id = 0
-        while hand.total > 21 and c_id < len(hand.cards):
-            card = hand.cards[c_id]
-            hand.total -= 10 if card.value == 11 else 0 #BLACJACK HAX
-            card.value -= 10 if card.value == 11 else 0
-            c_id += 1
+def ace_reduce(state):
+    if state.total <= 21:
+        return
+    c_id = 0
+    while state.total > 21 and c_id < len(state.cards):
+        card = state.cards[c_id]
+        state.total -= 10 if card.value == 11 else 0 #BLACJACK HAX
+        card.value -= 10 if card.value == 11 else 0
+        c_id += 1
 
-    ace = ace_reduce(hand)
-    return np.random.rand() < 0.5 if hand.total < 21 else 1
+#player policy, hand = state
+def player_pi(state: State):
+    return np.random.rand() < 0.5 if state.total < 21 else 1
 
 
 #HIT = 0, HOLD = 1, simple
-def dealer_pi(hand):
-    def ace(hand):
-        ace = [card.value == 11 for card in hand.cards]
+def dealer_pi(state: State):
+    def ace(state: State):
+        ace = [card.value == 11 for card in state.cards]
         return True in ace
     
     soft17 = False
-    if hand.total == 17 and ace(hand):
+    if state.total == 17 and ace(state):
         soft17 = True
 
-    return int(hand.total >= 17 and not soft17)
+    return int(state.total >= 17 and not soft17)
 
 class Result(IntFlag):
     dwin = -1
@@ -138,21 +141,22 @@ class Result(IntFlag):
     pwin = 1
 
 
-#TODO: ACE REDUCE WILL NEVER BE EXECUTED DUE TO SHIT LOOP, should work now?
-def play_turn(deck, policy, hand):
-    stop = hand.total >= 21
+def play_turn(deck, policy, state, ace_reduce=None):
+    if state.total >= 21:
+        return []
     log = []
-    a = int(policy(hand))
     while True:
-        log.append((copy.deepcopy(hand), a))
-        ACTIONS[a](deck, hand)
-        #a can change only from hit to hold, necessary for stochastic policies
-        a = int(policy(hand)) + int(a - 1 >= 0)
-        stop = hand.total >= 21 or a != 0
+        a = int(policy(state))
+        log.append((copy.deepcopy(state), a))
+        ACTIONS[a](deck, state)
+        #currently a callback, lazy hack
+        if ace_reduce is not None:
+            ace_reduce(state)
+
+        stop = state.total >= 21 or a != 0
         if stop:
             break
 
-    #NOTE: The log will be empty in case of a natural blackjack        
     return log
 
 
@@ -161,16 +165,20 @@ def episode(deck, plog, dlog):
     #pt - player total, dt - dealer total
     def winner(pt, dt):
         #player won?
-        result = Result(int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21)))
-        #if it's not a draw, the dealer won, TODO: do this without branching
-        result = Result.dwin if result == 0 and pt != dt else result
+        result = int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21))
+        result = int(Result.dwin if result == 0 and pt != dt else result)
         return result
 
     dealer, player = deal(deck)
+
+    player[0].optotal = dealer.cards[0].value
+    dealer.optotal = player[0].total
     if dealer.total < 21 and player[0].total < 21:
-        plog.append(play_turn(deck, player_pi, player[0]))
+        plog.append(play_turn(deck, player_pi, player[0], ace_reduce))
+        dealer.optotal = player[0].total
         dlog.append(play_turn(deck, dealer_pi, dealer))
     else:
+        #log is empty for natural 21
         plog.append([])
         dlog.append([])
     result = winner(player[0].total, dealer.total)
@@ -186,7 +194,7 @@ def episode(deck, plog, dlog):
 
 
 def gatherxp(deck, count=10):
-    #turn logs -> experience, calling it exp is a little confusing
+
     def logs2xp(turnlog, result, gamma=1):
         xp = []
         #natural blackjack creates an empty log, nothing to learn from that
@@ -202,10 +210,23 @@ def gatherxp(deck, count=10):
         return xp
 
     plog, dlog = [], []
-    #play out all the episodes
+    xp = []
+    wins = 0
     for _ in range(count):
         result = episode(deck, plog, dlog)
-    ep = [logs2xp(turnlog, result, 0.9) for turnlog in plog]
+        xp.append(logs2xp(plog[-1], result, 0.9)) 
+        wins += int(result == 1)
+            
+    return xp
+
+def calculate_Q(xp):
+    G = np.zeros((22, 12, len(ACTIONS), 0)).tolist()
+    Q = np.zeros((22, 12, len(ACTIONS))).tolist()
+    for ep in xp:
+        for (state, a, g) in ep:
+            G[state.total][state.optotal][a].append(g)
 
 deck = deck_init(6)
-gatherxp(deck)
+xp = gatherxp(deck)
+calculate_Q(xp)
+
