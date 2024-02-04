@@ -30,7 +30,8 @@ import copy
 """
 Repeat the functionality of this notebook using more realistic Blackjack rules. 
 For example, in the actual game of Blackjack each player immediately gets two cards 
-(however, only one of the dealer's cards is known to the player, before the player finishes his/hers turn).
+(however, only one of the dealer's cards is known to the player, 
+before the player finishes his/hers turn).
 """
 class Rank(IntFlag):
     TWO=2
@@ -67,13 +68,10 @@ class Card:
 class State:
     cards: [Card]
     total: int
-    optotal: int    #a hack that wont break anything but will cause problems 
+    optotal: int    #sum visible to the opposite side of the table 
 
-    def __hash__():
-        return hash(astuple(self))
 
 def deck_init(deck_count=1):
-    #limit
     l = lambda r : r if r <= 11 else 10
     deck = [Card(l(rank), suit) for rank in range(Rank.TWO, Rank.RANK_TOTAL) \
             for suit in range(Suit.SUIT_TOTAL) for _ in range(deck_count)]
@@ -100,14 +98,13 @@ ACTIONS = [draw, hold]
 def deal(deck):
     dealer = State([], 0, 0)
     draw(deck, dealer, count=2)
-
     #making it an array incase I want to add spliting
     player = [State([], 0, 0)]
     draw(deck, player[0], count=2)
 
     return dealer, player
 
-    #reduce the value of an ace if the player is about to bust
+#reduce the value of an ace if the player is about to bust
 def ace_reduce(state):
     if state.total <= 21:
         return
@@ -164,8 +161,7 @@ def episode(deck, plog, dlog):
 
     #pt - player total, dt - dealer total
     def winner(pt, dt):
-        #player won?
-        result = int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21))
+        result = int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21)) #pwin?
         result = int(Result.dwin if result == 0 and pt != dt else result)
         return result
 
@@ -178,7 +174,6 @@ def episode(deck, plog, dlog):
         dealer.optotal = player[0].total
         dlog.append(play_turn(deck, dealer_pi, dealer))
     else:
-        #log is empty for natural 21
         plog.append([])
         dlog.append([])
     result = winner(player[0].total, dealer.total)
