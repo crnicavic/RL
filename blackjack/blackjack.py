@@ -1,12 +1,11 @@
 """
 reject OOP, embrace monke
 - Let it be clear i regret this statement, classes would have made this so much easier
-- The base of the simulator and learning is very simple and i think good
+- The base of the simulator and learning is very simple 
     but adding hacks to make optotals and ace_reducers work ruined everything
     which could have been avoided by using classes
     * which doesn't change the fact that I hate them
 """
-from numpy import random as rand
 import matplotlib.pyplot as plt
 
 import tkinter
@@ -22,8 +21,6 @@ from matplotlib.figure import Figure
 from dataclasses import dataclass, astuple
 
 from enum import IntFlag, Enum
-
-from itertools import repeat
 
 import copy
 
@@ -83,6 +80,8 @@ def deck_init(deck_count=1):
 #rcpt - recipient of the card
 def draw(deck, rcpt, count=1):
     for _ in range(count):
+        if not deck:
+            deck = deck_init(6)
         rcpt.cards.append(deck.pop(-1))
         rcpt.total += rcpt.cards[-1].value
 
@@ -114,10 +113,7 @@ def ace_reduce(state):
         state.total -= 10 if card.value == 11 else 0 #BLACJACK HAX
         card.value -= 10 if card.value == 11 else 0
         c_id += 1
-
-#player policy, hand = state
-def player_pi(state: State):
-    return np.random.rand() < 0.5 if state.total < 21 else 1
+    return
 
 
 #HIT = 0, HOLD = 1, simple
@@ -129,8 +125,8 @@ def dealer_pi(state: State):
     soft17 = False
     if state.total == 17 and ace(state):
         soft17 = True
-
     return int(state.total >= 17 and not soft17)
+
 
 class Result(IntFlag):
     dwin = -1
@@ -158,7 +154,6 @@ def play_turn(deck, policy, state, ace_reduce=None):
 
 
 def episode(deck, plog, dlog):
-
     #pt - player total, dt - dealer total
     def winner(pt, dt):
         result = int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21)) #pwin?
@@ -177,6 +172,7 @@ def episode(deck, plog, dlog):
         plog.append([])
         dlog.append([])
     result = winner(player[0].total, dealer.total)
+    """
     print("---------GAME INFO----------")
     print(f"player total = {player[0].total}")
     print(f"dealer total = {dealer.total}")
@@ -184,12 +180,11 @@ def episode(deck, plog, dlog):
     print(f"RESULT: {result}")
     print(f"Player log: {plog[-1]}")
     print(f"Dealer log: {dlog[-1]}\n")
-
+    """
     return result
 
 
 def gatherxp(deck, count=10):
-
     def logs2xp(turnlog, result, gamma=1):
         xp = []
         #natural blackjack creates an empty log, nothing to learn from that
@@ -214,14 +209,36 @@ def gatherxp(deck, count=10):
             
     return xp
 
+
 def calculate_Q(xp):
     G = np.zeros((22, 12, len(ACTIONS), 0)).tolist()
     Q = np.zeros((22, 12, len(ACTIONS))).tolist()
     for ep in xp:
         for (state, a, g) in ep:
             G[state.total][state.optotal][a].append(g)
+    
+    for pt in range(len(G)):
+        for dt in range(len(G[pt])):
+            Q[pt][dt] = [np.mean(G[pt][dt][a]) if G[pt][dt][a] else -np.inf \
+                    for a in range(len(ACTIONS))]
+    return Q
+
+
+def create_policy(Q):
+    def policy(state: State):
+        if state.total >= 21:
+            return 1
+        if -np.inf in Q[state.total][state.optotal]:
+            return int(np.random.rand() < 0.5) if state.total < 21 else 1
+        return np.argmax(Q[state.total][state.optotal])
+
+    return policy
+
 
 deck = deck_init(6)
-xp = gatherxp(deck)
-calculate_Q(xp)
-
+xp = []
+Q = calculate_Q(xp)
+player_pi = create_policy(Q)
+xp = gatherxp(deck, count=10000)
+Q = calculate_Q(xp)
+print(*Q, sep="\n")
