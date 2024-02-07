@@ -67,23 +67,28 @@ class State:
     total: int
     optotal: int    #sum visible to the opposite side of the table 
 
-
 def deck_init(deck_count=1):
     l = lambda r : r if r <= 11 else 10
     deck = [Card(l(rank), suit) for rank in range(Rank.TWO, Rank.RANK_TOTAL) \
             for suit in range(Suit.SUIT_TOTAL) for _ in range(deck_count)]
     np.random.shuffle(deck)
-    cut = len(deck) // 5
     return deck
 
+#index of current card
+topdeck = -1
+#position of the cut - realisticly it's about 70
+CUT = 20
 
 #rcpt - recipient of the card
 def draw(deck, rcpt, count=1):
+    global topdeck
     for _ in range(count):
-        if not deck:
-            deck = deck_init(6)
-        rcpt.cards.append(deck.pop(-1))
+        if len(deck) + topdeck < CUT:
+            topdeck = -1
+            np.random.shuffle(deck)
+        rcpt.cards.append(deck[topdeck])
         rcpt.total += rcpt.cards[-1].value
+        topdeck -= 1
 
 
 def hold(deck, rcpt, count=1):
@@ -154,6 +159,10 @@ def play_turn(deck, policy, state, ace_reduce=None):
 
 
 def episode(deck, plog, dlog):
+    def revert_aces(cards):
+        for card in cards:
+            card.value += 10 if card.value == 1 else 0
+
     #pt - player total, dt - dealer total
     def winner(pt, dt):
         result = int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21)) #pwin?
@@ -181,6 +190,7 @@ def episode(deck, plog, dlog):
     print(f"Player log: {plog[-1]}")
     print(f"Dealer log: {dlog[-1]}\n")
     """
+    revert_aces(player[0].cards)
     return result
 
 
@@ -206,8 +216,9 @@ def gatherxp(deck, count=10):
         result = episode(deck, plog, dlog)
         xp.append(logs2xp(plog[-1], result, 0.9)) 
         wins += int(result == 1)
-            
-    return xp
+    # win percentage
+    winrate = wins / count * 100      
+    return xp, winrate
 
 
 def calculate_Q(xp):
@@ -237,8 +248,8 @@ def create_policy(Q):
 
 deck = deck_init(6)
 xp = []
-Q = calculate_Q(xp)
-player_pi = create_policy(Q)
-xp = gatherxp(deck, count=10000)
-Q = calculate_Q(xp)
-print(*Q, sep="\n")
+for _ in range(40):
+    Q = calculate_Q(xp)
+    player_pi = create_policy(Q)
+    xp, winrate = gatherxp(deck, count=10000)
+    print(winrate)
