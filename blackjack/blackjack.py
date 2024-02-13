@@ -158,7 +158,8 @@ def play_turn(deck, policy, state, ace_reduce=None):
     return log
 
 
-def episode(deck, plog, dlog):
+def episode(deck, player_pi):
+
     def revert_aces(cards):
         for card in cards:
             card.value += 10 if card.value == 1 else 0
@@ -174,12 +175,12 @@ def episode(deck, plog, dlog):
     player[0].optotal = dealer.cards[0].value
     dealer.optotal = player[0].total
     if dealer.total < 21 and player[0].total < 21:
-        plog.append(play_turn(deck, player_pi, player[0], ace_reduce))
+        plog = play_turn(deck, player_pi, player[0], ace_reduce)
         dealer.optotal = player[0].total
-        dlog.append(play_turn(deck, dealer_pi, dealer))
+        dlog = play_turn(deck, dealer_pi, dealer)
     else:
-        plog.append([])
-        dlog.append([])
+        plog = []
+        dlog = []
     result = winner(player[0].total, dealer.total)
     """
     print("---------GAME INFO----------")
@@ -187,14 +188,14 @@ def episode(deck, plog, dlog):
     print(f"dealer total = {dealer.total}")
 
     print(f"RESULT: {result}")
-    print(f"Player log: {plog[-1]}")
-    print(f"Dealer log: {dlog[-1]}\n")
+    print(f"Player log: {plog}")
+    print(f"Dealer log: {dlog}\n")
     """
     revert_aces(player[0].cards)
-    return result
+    return result, plog, dlog
 
 
-def gatherxp(deck, count=10):
+def gatherxp(deck, policy, gamma=1, count=10):
     def logs2xp(turnlog, result, gamma=1):
         xp = []
         #natural blackjack creates an empty log, nothing to learn from that
@@ -209,47 +210,16 @@ def gatherxp(deck, count=10):
             xp.append((hand, a, g))
         return xp
 
-    plog, dlog = [], []
     xp = []
     wins = 0
+    score = 0
     for _ in range(count):
-        result = episode(deck, plog, dlog)
-        xp.append(logs2xp(plog[-1], result, 0.9)) 
+        result, plog, dlog = episode(deck, policy)
+        xp.append(logs2xp(plog, result, gamma)) 
         wins += int(result == 1)
-    # win percentage
+        score += result
     winrate = wins / count * 100      
-    return xp, winrate
+    score /= count
+    return xp, winrate, score
 
 
-def calculate_Q(xp):
-    G = np.zeros((22, 12, len(ACTIONS), 0)).tolist()
-    Q = np.zeros((22, 12, len(ACTIONS))).tolist()
-    for ep in xp:
-        for (state, a, g) in ep:
-            G[state.total][state.optotal][a].append(g)
-    
-    for pt in range(len(G)):
-        for dt in range(len(G[pt])):
-            Q[pt][dt] = [np.mean(G[pt][dt][a]) if G[pt][dt][a] else -np.inf \
-                    for a in range(len(ACTIONS))]
-    return Q
-
-
-def create_policy(Q):
-    def policy(state: State):
-        if state.total >= 21:
-            return 1
-        if -np.inf in Q[state.total][state.optotal]:
-            return int(np.random.rand() < 0.5) if state.total < 21 else 1
-        return np.argmax(Q[state.total][state.optotal])
-
-    return policy
-
-
-deck = deck_init(6)
-xp = []
-for _ in range(40):
-    Q = calculate_Q(xp)
-    player_pi = create_policy(Q)
-    xp, winrate = gatherxp(deck, count=10000)
-    print(winrate)
