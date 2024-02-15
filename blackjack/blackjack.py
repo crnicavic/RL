@@ -195,31 +195,3 @@ def episode(deck, player_pi):
     return result, plog, dlog
 
 
-def gatherxp(deck, policy, gamma=1, count=10):
-    def logs2xp(turnlog, result, gamma=1):
-        xp = []
-        #natural blackjack creates an empty log, nothing to learn from that
-        if not turnlog:
-            return xp
-        rewards = [0 for _ in turnlog]
-        rewards[-1] = result
-        g = [result]
-        for r in rewards[:-1]:
-            g.insert(0, g[0]*gamma) 
-        for (hand, a), g in zip(turnlog, g):
-            xp.append((hand, a, g))
-        return xp
-
-    xp = []
-    wins = 0
-    score = 0
-    for _ in range(count):
-        result, plog, dlog = episode(deck, policy)
-        xp.append(logs2xp(plog, result, gamma)) 
-        wins += int(result == 1)
-        score += result
-    winrate = wins / count * 100      
-    score /= count
-    return xp, winrate, score
-
-
