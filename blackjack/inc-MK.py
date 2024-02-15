@@ -71,16 +71,18 @@ def create_policy(Q, G, alpha=0.1):
     return policy
 
 
-def inc_mk():
-    deck = deck_init(20)
+def inc_mk(maxiter=40, deckcount=9):
+    deck = deck_init(deckcount)
     Q = init_Q()
     xp = []
     best_score = -np.inf
     best_policy = None
-    for _ in range(40):
+    for _ in range(maxiter):
         G = calculate_gains(xp, gamma=0.9)
         player_pi = create_policy(Q, G)
         xp, winrate, score = gatherxp(deck, player_pi, count=10000)
         if best_score < score:
             best_policy = player_pi
         print(score)
+
+inc_mk()
