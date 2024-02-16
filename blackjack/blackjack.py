@@ -1,10 +1,5 @@
 """
 reject OOP, embrace monke
-- Let it be clear i regret this statement, classes would have made this so much easier
-- The base of the simulator and learning is very simple 
-    but adding hacks to make optotals and ace_reducers work ruined everything
-    which could have been avoided by using classes
-    * which doesn't change the fact that I hate them
 """
 import matplotlib.pyplot as plt
 
@@ -166,7 +161,8 @@ def episode(deck, player_pi):
 
     #pt - player total, dt - dealer total
     def winner(pt, dt):
-        result = int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21)) #pwin?
+        #agent winning conditions
+        result = int((pt <= 21 and pt > dt) or (pt <= 21 and dt > 21)) 
         result = int(Result.dwin if result == 0 and pt != dt else result)
         return result
 

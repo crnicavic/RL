@@ -55,7 +55,7 @@ def create_policy(G):
 
     return policy
 
-def naive_mk(maxiter=40, deckcount=9):
+def naive_mk(maxiter=40, deckcount=9, gamecount=10000):
     deck = deck_init(deckcount)
     xp = []
     best_score = -np.inf
@@ -63,7 +63,7 @@ def naive_mk(maxiter=40, deckcount=9):
     for _ in range(maxiter):
         G = calculate_gains(xp)
         player_pi = create_policy(G)
-        xp, winrate, score = gatherxp(deck, player_pi, count=10000)
+        xp, winrate, score = gatherxp(deck, player_pi, gamecount)
         if best_score < score:
             best_policy = player_pi
         print(score)

@@ -54,11 +54,11 @@ def init_Q():
 
 
 #i really wish for static to be a thing in python
-def create_policy(Q, G, alpha=0.1):
+def update_policy(Q, G, alpha=0.1):
     
     for pt in range(len(G)):
         for dt in range(len(G[pt])):
-            #jesus...
+            #jesus... pt and dt define state
             update_action_values(pt, dt, Q, G, alpha)
     
     def policy(state: State):
@@ -71,14 +71,14 @@ def create_policy(Q, G, alpha=0.1):
     return policy
 
 
-def inc_mk(maxiter=40, deckcount=9):
+def inc_mk(maxiter=40, deckcount=9, gamecount=10000):
     deck = deck_init(deckcount)
     Q = init_Q()
     xp = []
     for _ in range(maxiter):
         G = calculate_gains(xp, gamma=0.9)
-        player_pi = create_policy(Q, G)
-        xp, winrate, score = gatherxp(deck, player_pi, count=10000)
+        player_pi = update_policy(Q, G)
+        xp, winrate, score = gatherxp(deck, player_pi, gamecount)
         print(score)
     return player_pi
 
