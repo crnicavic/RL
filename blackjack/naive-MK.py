@@ -1,5 +1,5 @@
 from blackjack import *
-
+import visualize
 
 def gatherxp(deck, policy, count=10):
     def logs2xp(turnlog, result):
@@ -14,16 +14,13 @@ def gatherxp(deck, policy, count=10):
         return xp
 
     xp = []
-    wins = 0
     score = 0
     for _ in range(count):
         result, plog, dlog = episode(deck, policy)
         xp.append(logs2xp(plog, result)) 
-        wins += int(result == 1)
         score += result
-    winrate = wins / count * 100      
     score /= count
-    return xp, winrate, score
+    return xp, score
 
 
 def calculate_gains(xp, gamma=1):
@@ -38,18 +35,18 @@ def calculate_gains(xp, gamma=1):
     return G
 
 
-def create_policy(G):
+def create_policy(G, epsilon=0.05):
     Q = np.zeros((22, 12, len(ACTIONS))).tolist()
     
     for pt in range(len(G)):
         for dt in range(len(G[pt])):
-            Q[pt][dt] = [np.mean(G[pt][dt][a]) if G[pt][dt][a] else -np.inf \
+            Q[pt][dt] = [np.mean(G[pt][dt][a]) if G[pt][dt][a] else 0 \
                     for a in range(len(ACTIONS))]
     
     def policy(state: State):
         if state.total >= 21:
             return 1
-        if -np.inf in Q[state.total][state.optotal]:
+        if np.random.rand() < epsilon:
             return int(np.random.rand() < 0.5) if state.total < 21 else 1
         return np.argmax(Q[state.total][state.optotal])
 
@@ -60,13 +57,19 @@ def naive_mk(maxiter=40, deckcount=9, gamecount=10000):
     xp = []
     best_score = -np.inf
     best_policy = None
+    scores = [] 
     for _ in range(maxiter):
         G = calculate_gains(xp)
         player_pi = create_policy(G)
-        xp, winrate, score = gatherxp(deck, player_pi, gamecount)
+        xp, score = gatherxp(deck, player_pi, gamecount)
+        scores.append(score)
         if best_score < score:
             best_policy = player_pi
-        print(score)
-    return best_policy
+        
+    return best_policy, scores
 
-naive_mk()
+fig, ax = plt.subplots(2)
+policy, scores = naive_mk(maxiter=10)
+visualize_policy(policy, ax[0])
+ax[1].plot(scores)
+plt.show()

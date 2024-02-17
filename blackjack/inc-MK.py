@@ -14,16 +14,13 @@ def gatherxp(deck, policy, count=10):
         return xp
 
     xp = []
-    wins = 0
     score = 0
     for _ in range(count):
         result, plog, dlog = episode(deck, policy)
         xp.append(logs2xp(plog, result)) 
-        wins += int(result == 1)
         score += result
-    winrate = wins / count * 100      
     score /= count
-    return xp, winrate, score
+    return xp, score
 
 
 #might be considered hacky, but i think it's elegant
@@ -47,14 +44,9 @@ def update_action_values(pt, dt, Q, G, alpha):
             Q[pt][dt][a] += alpha * (g - Q[pt][dt][a])
 
 
-#bad bad bad bad
-def init_Q():
-    Q = [[[-np.inf, -np.inf] for dt in range(12)] for pt in range(22)]
-    return Q
-
 
 #i really wish for static to be a thing in python
-def update_policy(Q, G, alpha=0.1):
+def update_policy(Q, G, alpha=0.1, epsilon=0.05):
     
     for pt in range(len(G)):
         for dt in range(len(G[pt])):
@@ -64,22 +56,35 @@ def update_policy(Q, G, alpha=0.1):
     def policy(state: State):
         if state.total >= 21:
             return 1
-        if -np.inf in Q[state.total][state.optotal]:
+        elif np.random.rand() < epsilon:
             return int(np.random.rand() < 0.5) if state.total < 21 else 1
         return np.argmax(Q[state.total][state.optotal])
 
     return policy
 
 
+def create_testing_policy(Q):
+    def policy(state: State):
+        if state.total >= 21:
+            return 1
+        return np.argmax(Q[state.total][state.optotal])
+    return policy
+
+
 def inc_mk(maxiter=40, deckcount=9, gamecount=10000):
     deck = deck_init(deckcount)
-    Q = init_Q()
+    Q = np.zeros((22, 12, len(ACTIONS))).tolist()
     xp = []
+    scores = []
     for _ in range(maxiter):
         G = calculate_gains(xp, gamma=0.9)
         player_pi = update_policy(Q, G)
-        xp, winrate, score = gatherxp(deck, player_pi, gamecount)
-        print(score)
-    return player_pi
+        xp, score = gatherxp(deck, player_pi, gamecount)
+        scores.append(score)
+    return create_testing_policy(Q), scores
 
-inc_mk()
+fig, ax = plt.subplots(2)
+policy, scores = inc_mk(maxiter=10)
+visualize_policy(policy, ax[0])
+ax[1].plot(scores)
+plt.show()
