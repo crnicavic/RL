@@ -1,16 +1,18 @@
 """
 reject OOP, embrace monke
 """
+
+import numpy as np
+
+
 import matplotlib.pyplot as plt
 
 import tkinter
 from tkinter import ttk
 
-import numpy as np
-
 from matplotlib.backend_bases import key_press_handler
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
-                                               NavigationToolbar2Tk)
+            NavigationToolbar2Tk)
 from matplotlib.figure import Figure
 
 from dataclasses import dataclass, astuple
@@ -190,4 +192,37 @@ def episode(deck, player_pi):
     revert_aces(player[0].cards)
     return result, plog, dlog
 
+
+COLORS = [(0xFF, 0x00, 0x00),   #hit = red
+          (0x00, 0x00, 0xFF),   #hold = blue
+          (0x00, 0x00, 0x00)]   #undefined=black 
+
+#visualize policy based on Q
+def visualize_Q(Q):
+    color_grid = np.zeros((len(Q), len(Q[0])))
+    for pt in len(Q):
+        for dt in len(Q[pt]):
+            color_grid[pt][dt] = COLORS[np.argmax(Q[pt][dt])]
+    plt.imshow(color_grid)
+
+
+#DO NOT PASS A TRAINING POLICY TO THIS!!
+def visualize_policy(policy, ax=None):
+    color_grid = [[COLORS[2] for pt in range(22)] for dt in range(12)]
+    for dt in range(len(color_grid)):
+        for pt in range(len(color_grid[dt])):
+            cards = [Card(pt//2, 0), Card(pt - pt//2, 0)]
+            state: State = State(cards, pt, dt)
+            a = policy(state)
+            color_grid[dt][pt] = COLORS[a]
+    if ax is None:
+        plt.imshow(color_grid)
+        plt.xticks(np.arange(0, 22))
+        plt.yticks(np.arange(0, 12))
+        plt.show()
+        return
+    ax.imshow(color_grid)
+
+    ax.set_xticks(np.arange(0, 22))
+    ax.set_yticks(np.arange(0, 12))
 
