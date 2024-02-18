@@ -20,40 +20,29 @@ class Bandit:
     span: int
 
 #pulling a lever returns a number in range (mean-span, mean+span)
-def pull(index: int, bandits: list[Bandit]):
+def pull \
+(index: int, bandits: list[Bandit]) -> float:
+
     if index >= len(bandits):
         return -1000
     mean, span = bandits[index].mean, bandits[index].span
     return mean + span * 2 *(np.random.rand() - 0.5)
 
 #everytime this pull function is called, the mean changes for up to 15%
-def chaos_pull(index: int, bandits: list[Bandit]):
+def chaos_pull \
+(index: int, bandits: list[Bandit]) -> float:
+
     if index >= len(bandits):
         return -1000
     #Pull the lever -> get a reward -> the mean changes
-    #commented because right now I wish to this differently
     mean, span = bandits[index].mean, bandits[index].span
+    bandits[index].mean *= (rand.rand() * 0.3 + 0.85)
     return mean + span * 2 *(rand.rand() - 0.5)
 
 
-#it's just a joke, but probably the most realistic
-def complete_chaos_pull(index: int, bandits: list[Bandit]):
-    if index >= len(bandits):
-        return -1000
-    mean, span = bandits[index].mean, bandits[index].span
-    if rand.rand() < 0.1e-10:
-        raise Exception("haha")
-    bandits[index].mean *= rand.rand() * 0.5 + 0.5
-    bandits[index].span *= rand.rand() * 0.5 + 0.5
-    if bandits[index].mean > 200:
-        raise Exception("Too Good, sorry")
-    if bandits[index].span < 0.1:
-        raise Exception("Too consistent, sorry")
-    bandits = rand.shuffle(bandits)
-    return mean + span * 2 *(rand.rand() - 0.5)
+def train \
+(bandits: list[Bandit], EPS, ITERS=5000) -> (list[float], list[float], list[list[float]]):
 
-
-def train(bandits: list[Bandit], EPS, ITERS = 5000):
     q = [100 for _ in range(BANDIT_COUNT)]
     #each column of the training log is one iteration of q's
     training_log = np.zeros((BANDIT_COUNT, ITERS))
@@ -64,14 +53,14 @@ def train(bandits: list[Bandit], EPS, ITERS = 5000):
         #stored like this for later plotting
         rewards[i] = pull(a, bandits)
         q[a] = q[a] + ALPHA * (rewards[i] - q[a])
-        # i hate this, can't figure out how to transpose stuff
         for j in range(len(q)):
             training_log[j][i] = q[j]
     return q, rewards, training_log
 
-
 #writing a new function isn't elegant, but probably simpler
-def chaos_train(bandits: list[list[Bandit]], pullf: callable, EPS, ITERS = 5000):
+def chaos_train \
+(bandits: list[list[Bandit]], EPS, ITERS = 5000) -> (list[float], list[float], float):
+
     q = [100 for _ in range(BANDIT_COUNT)]
     #each column of the training log is one iteration of q's
     rewards = np.zeros(ITERS)
@@ -80,13 +69,14 @@ def chaos_train(bandits: list[list[Bandit]], pullf: callable, EPS, ITERS = 5000)
     for i in range(ITERS):
         a = np.argmax(q) if rand.rand() > EPS else rand.randint(0,BANDIT_COUNT)
         #stored like this for later plotting
-        rewards[i] = pullf(a, bandits[i])
+        rewards[i] = chaos_pull(a, bandits[i])
         q[a] = q[a] + ALPHA * (rewards[i] - q[a])
         ideal_rewards[i] = max(b.mean for b in bandits[i])
     return q, rewards, np.cumsum(ideal_rewards)
 
 
-def test(bandits: list[Bandit], q: list[float], ITERS = 1000):
+def test \
+(bandits: list[Bandit], q: list[float], ITERS = 1000) -> list[float]:
     rewards = np.zeros(ITERS)
     for i in range(ITERS):
         a = np.argmax(q)
@@ -95,19 +85,23 @@ def test(bandits: list[Bandit], q: list[float], ITERS = 1000):
     return rewards
 
 
-def chaos_test(bandits: list[list[Bandit]], q: list[float], pullf: callable, ITERS = 1000):
+def chaos_test \
+(bandits: list[Bandit], q: list[float], ITERS = 1000) -> (list[float], float):
+
     rewards = np.zeros(ITERS)
     ideal_rewards = np.zeros(ITERS)
     for i in range(ITERS):
         a = np.argmax(q)
-        rewards[i] = pullf(a, bandits[i])
+        rewards[i] = chaos_pull(a, bandits[i])
         ideal_rewards[i] = max([b.mean for b in bandits[i]])
     
     return rewards, np.cumsum(ideal_rewards)
 
 
 #slider callback function to plot the q change over time for different eps
-def switch_eps_plot(eps_index: int):
+def switch_eps_plot \
+(eps_index: int):
+
     log = training_logs[int(eps_index)-1]
     figures[2].suptitle(f"eps={EPSILONS[int(eps_index)-1]}")
     for i in range(BANDIT_COUNT):
@@ -116,11 +110,12 @@ def switch_eps_plot(eps_index: int):
         #ommiting the first 100 values just to showcase the convergence better
         axes[2][row][col].plot(log[row*len(axes[2][row]) + col][100:])
         axes[2][row][col].plot(bandits[i].mean*np.ones(len(log[0]) - 100)) 
-    print(tabControl.index("current"))
     canvases[2].draw()
 
 
-def init_gui(name: str):
+def init_gui \
+(name: str):
+
     #Initialize the GUI
     root = tkinter.Tk()
     root.wm_title(str)
@@ -144,7 +139,9 @@ def init_gui(name: str):
     return root, tabControl, tabs
 
 
-def fig_create(tabs):
+def fig_create \
+(tabs):
+
     #Create the Figures and Draw them to a canvas
     figures = []
     #multiple of axis is axes, storing all axises? configurations
@@ -168,7 +165,7 @@ def fig_create(tabs):
 
     return canvases, figures, axes
 
-#globals because I don't know how to make the GUI work otherwise
+#just call all the function and plot whatever they return
 TAB_NAMES = ['1) Training', '2)Test', '3)Q Convergence', '4)Chaos Training', '5)Chaos Test']
 BANDIT_COUNT = 5
 TRAINING_ITERS = 5000
@@ -192,6 +189,7 @@ anot = (10, ideal_gain[-1]-1000)
 testing_q = []
 training_logs = []
 
+#plots for the first tab - training performance
 for row in range(len(EPSILONS)):
     q, rewards, t = train(bandits,  EPSILONS[row])
     training_logs.append(t)
@@ -207,6 +205,7 @@ for row in range(len(EPSILONS)):
 ideal_gain = np.cumsum(best_bandit * np.ones(TESTING_ITERS-1))
 anot = (10, ideal_gain[-1] * 0.9)
 
+#plots for the second tab - test performance
 for row in range(len(EPSILONS)):
     rewards = test(bandits, testing_q[row], TESTING_ITERS)
 
@@ -214,9 +213,8 @@ for row in range(len(EPSILONS)):
     axes[1][row].plot(ideal_gain)
     axes[1][row].annotate(f"for EPSILON={EPSILONS[row]}", xy=(anot))
 
-#draw the first thing
+#plot for the first slider value
 switch_eps_plot(1)
-
 
 """
 now the fun part, the means change
@@ -224,12 +222,16 @@ generating the means for every bandit for every iteration ahead of time
 just to see how the different Epsilons stack against each other
 """
 #function to change the mean of a bandit
-def change_mean(b):
+def change_mean \
+(b: Bandit) -> Bandit:
+    
     return Bandit(b.mean * (rand.rand() * 0.3) + 0.85, b.span)
 
 
 #function to generate how the bandits change over time
-def embrace_chaos(PULL_COUNT: int, init_value: list[Bandit]):
+def embrace_chaos \
+(PULL_COUNT: int, init_value: list[Bandit]) -> list[Bandit]:
+
     bandits = []
     bandits.append(init_value) 
     for i in range(PULL_COUNT-1):
@@ -237,8 +239,9 @@ def embrace_chaos(PULL_COUNT: int, init_value: list[Bandit]):
     return bandits
         
 chaos_bandits = embrace_chaos(TRAINING_ITERS, bandits)
+#plot training perforamnce for training when means change
 for row in range(len(EPSILONS)):
-    q, rewards, ideal_gain = chaos_train(chaos_bandits, chaos_pull, EPSILONS[row])
+    q, rewards, ideal_gain = chaos_train(chaos_bandits, EPSILONS[row])
     
     axes[3][row].plot(np.cumsum(rewards))
     axes[3][row].plot(ideal_gain)
@@ -248,8 +251,9 @@ for row in range(len(EPSILONS)):
 
 #and finally, see how we compare in the real world
 chaos_bandits = embrace_chaos(TESTING_ITERS, chaos_bandits[-1])
+#plot test
 for row in range(len(EPSILONS)):
-    rewards, ideal_gain = chaos_test(chaos_bandits, testing_q[row], chaos_pull, TESTING_ITERS)
+    rewards, ideal_gain = chaos_test(chaos_bandits, testing_q[row], TESTING_ITERS)
 
     axes[4][row].plot(np.cumsum(rewards))
     axes[4][row].plot(ideal_gain)
