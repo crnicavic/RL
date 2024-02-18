@@ -1,7 +1,10 @@
 from blackjack import *
 import visualize
 
-def gatherxp(deck, policy, count=10):
+XP_t = list[(State, int, int)]
+def gatherxp \
+(deck: list[Card], policy: callable, count=10) -> (XP_t, float):
+
     def logs2xp(turnlog, result):
         xp = []
         #natural blackjack creates an empty log, nothing to learn from that
@@ -23,7 +26,11 @@ def gatherxp(deck, policy, count=10):
     return xp, score
 
 
-def calculate_gains(xp, gamma=1):
+#a matrix where every index is 2 lists
+gains_matrix = list[list[list[float], list[float]]]
+def calculate_gains \
+(xp: XP_t, gamma=1) -> gains_matrix:
+    
     G = np.zeros((22, 12, len(ACTIONS), 0)).tolist()
     for ep in xp:
         g = 0
@@ -35,7 +42,9 @@ def calculate_gains(xp, gamma=1):
     return G
 
 
-def create_policy(G, epsilon=0.05):
+def create_policy \
+(G: gains_matrix, epsilon=0.05) -> callable:
+
     Q = np.zeros((22, 12, len(ACTIONS))).tolist()
     
     for pt in range(len(G)):
@@ -52,7 +61,8 @@ def create_policy(G, epsilon=0.05):
 
     return policy
 
-def naive_mk(maxiter=40, deckcount=9, gamecount=10000):
+def naive_mk \
+(maxiter=40, deckcount=9, gamecount=10000) -> (callable, list[float]):
     deck = deck_init(deckcount)
     xp = []
     best_score = -np.inf

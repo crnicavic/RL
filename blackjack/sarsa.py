@@ -19,7 +19,8 @@ prev_a = None
 prev_state = None
 gQ = np.zeros((22, 12, len(ACTIONS))).tolist()
 prev_a = None
-def learn(state: State, result=None):
+def learn \
+(state: State, result: int=None) -> int:
     global gQ, prev_state, prev_a 
     random_a = lambda s: int(np.random.rand() < 0.5) if s.total < 21 else 1
     if prev_state is None: #init state
@@ -46,7 +47,8 @@ def learn(state: State, result=None):
     prev_a = a 
     return a 
 
-def create_testing_policy():
+def create_testing_policy \
+() -> callable:
     global gQ
     Q = copy.copy(gQ)    
     def policy(state: State):
@@ -64,7 +66,9 @@ g_alpha = 0
 g_gamma = 0
 g_epsilon = 0
 #this doesn't just play thousands of games, now theres active learning
-def sarsa(maxiter=20, deckcount=9, gamecount=10, alpha=0.1, gamma=1, epsilon=0.05):
+def sarsa \
+(maxiter=20, deckcount=9, gamecount=10, alpha=0.1, gamma=1, epsilon=0.05) \
+        -> (callable, list[float]):
     global g_alpha, g_gamma, g_epsilon
     g_alpha = alpha
     g_gamma = gamma

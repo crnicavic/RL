@@ -1,7 +1,9 @@
 from blackjack import *
 
 
-def gatherxp(deck, policy, count=10):
+XP_t = list[(State, int, int)]
+def gatherxp \
+(deck: list[Card], policy: callable, count: int=10) -> (XP_t, float):
     def logs2xp(turnlog, result):
         xp = []
         #natural blackjack creates an empty log, nothing to learn from that
@@ -24,7 +26,11 @@ def gatherxp(deck, policy, count=10):
 
 
 #might be considered hacky, but i think it's elegant
-def calculate_gains(xp, gamma=1):
+gains_matrix = list[list[list[float], list[float]]]
+
+def calculate_gains \
+(xp: XP_t, gamma=1) -> gains_matrix:
+
     G = np.zeros((22, 12, len(ACTIONS), 0)).tolist()
     for ep in xp:
         g = 0
@@ -35,8 +41,10 @@ def calculate_gains(xp, gamma=1):
             g *= gamma
     return G
 
+q_matrix = list[list[list[float]]]
+def update_action_values \
+(pt: int, dt: int, Q: q_matrix, G: gains_matrix, alpha: float =0.1):
 
-def update_action_values(pt, dt, Q, G, alpha):
     for a in range(len(ACTIONS)):
         #hack that will bite me later
         Q[pt][dt][a] = 0 if Q[pt][dt][a] == -np.inf else Q[pt][dt][a]
@@ -46,7 +54,8 @@ def update_action_values(pt, dt, Q, G, alpha):
 
 
 #i really wish for static to be a thing in python
-def update_policy(Q, G, alpha=0.1, epsilon=0.05):
+def update_policy \
+(Q: q_matrix, G: gains_matrix, alpha=0.1, epsilon=0.05) -> callable:
     
     for pt in range(len(G)):
         for dt in range(len(G[pt])):
@@ -63,7 +72,8 @@ def update_policy(Q, G, alpha=0.1, epsilon=0.05):
     return policy
 
 
-def create_testing_policy(Q):
+def create_testing_policy \
+(Q: q_matrix) -> callable:
     def policy(state: State):
         if state.total >= 21:
             return 1
@@ -71,7 +81,9 @@ def create_testing_policy(Q):
     return policy
 
 
-def inc_mk(maxiter=40, deckcount=9, gamecount=10000):
+def inc_mk \
+(maxiter=40, deckcount=9, gamecount=10000) -> (callable, list[float]):
+
     deck = deck_init(deckcount)
     Q = np.zeros((22, 12, len(ACTIONS))).tolist()
     xp = []

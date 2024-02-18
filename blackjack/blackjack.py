@@ -1,9 +1,7 @@
 """
 reject OOP, embrace monke
 """
-
 import numpy as np
-
 
 import matplotlib.pyplot as plt
 
@@ -21,12 +19,6 @@ from enum import IntFlag, Enum
 
 import copy
 
-"""
-Repeat the functionality of this notebook using more realistic Blackjack rules. 
-For example, in the actual game of Blackjack each player immediately gets two cards 
-(however, only one of the dealer's cards is known to the player, 
-before the player finishes his/hers turn).
-"""
 class Rank(IntFlag):
     TWO=2
     THREE=3
@@ -64,12 +56,16 @@ class State:
     total: int
     optotal: int    #sum visible to the opposite side of the table 
 
-def deck_init(deck_count=1):
+def deck_init \
+(deck_count=5) -> list[Card]:
+
     l = lambda r : r if r <= 11 else 10
     deck = [Card(l(rank), suit) for rank in range(Rank.TWO, Rank.RANK_TOTAL) \
             for suit in range(Suit.SUIT_TOTAL) for _ in range(deck_count)]
     np.random.shuffle(deck)
     return deck
+
+Log = list[(State, int)]
 
 #index of current card
 topdeck = -1
@@ -77,7 +73,9 @@ topdeck = -1
 CUT = 20
 
 #rcpt - recipient of the card
-def draw(deck, rcpt, count=1):
+def draw \
+(deck: list[Card], rcpt: State, count=1):
+
     global topdeck
     for _ in range(count):
         if len(deck) + topdeck < CUT:
@@ -96,7 +94,9 @@ def hold(deck, rcpt, count=1):
 ACTIONS = [draw, hold]
 
 
-def deal(deck):
+def deal \
+(deck: list[Card]) -> (State, State):
+
     dealer = State([], 0, 0)
     draw(deck, dealer, count=2)
     #making it an array incase I want to add spliting
@@ -106,7 +106,8 @@ def deal(deck):
     return dealer, player
 
 #reduce the value of an ace if the player is about to bust
-def ace_reduce(state):
+def ace_reduce \
+(state: State):
     if state.total <= 21:
         return
     c_id = 0
@@ -119,7 +120,8 @@ def ace_reduce(state):
 
 
 #HIT = 0, HOLD = 1, simple
-def dealer_pi(state: State):
+def dealer_pi \
+(state: State) -> int:
     def ace(state: State):
         ace = [card.value == 11 for card in state.cards]
         return True in ace
@@ -136,7 +138,9 @@ class Result(IntFlag):
     pwin = 1
 
 
-def play_turn(deck, policy, state, ace_reduce=None):
+def play_turn \
+(deck: list[Card], policy: callable, state: State, ace_reduce=None) -> Log:
+
     if state.total >= 21:
         return []
     log = []
@@ -155,7 +159,8 @@ def play_turn(deck, policy, state, ace_reduce=None):
     return log
 
 
-def episode(deck, player_pi):
+def episode \
+(deck: list[Card], player_pi: callable) -> (int, Log, Log):
 
     def revert_aces(cards):
         for card in cards:
@@ -197,17 +202,11 @@ COLORS = [(0xFF, 0x00, 0x00),   #hit = red
           (0x00, 0x00, 0xFF),   #hold = blue
           (0x00, 0x00, 0x00)]   #undefined=black 
 
-#visualize policy based on Q
-def visualize_Q(Q):
-    color_grid = np.zeros((len(Q), len(Q[0])))
-    for pt in len(Q):
-        for dt in len(Q[pt]):
-            color_grid[pt][dt] = COLORS[np.argmax(Q[pt][dt])]
-    plt.imshow(color_grid)
-
 
 #DO NOT PASS A TRAINING POLICY TO THIS!!
-def visualize_policy(policy, ax=None):
+def visualize_policy \
+(policy: callable, ax=None):
+
     color_grid = [[COLORS[2] for pt in range(22)] for dt in range(12)]
     for dt in range(len(color_grid)):
         for pt in range(len(color_grid[dt])):
