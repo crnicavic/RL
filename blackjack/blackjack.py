@@ -55,6 +55,7 @@ class State:
     cards: [Card]
     total: int
     optotal: int    #sum visible to the opposite side of the table 
+    aces: int    #count of aces
 
 def deck_init \
 (deck_count=5) -> list[Card]:
@@ -84,6 +85,7 @@ def draw \
         rcpt.cards.append(deck[topdeck])
         rcpt.total += rcpt.cards[-1].value
         topdeck -= 1
+        rcpt.aces += rcpt.cards[-1].value == 11
 
 
 def hold(deck, rcpt, count=1):
@@ -97,10 +99,10 @@ ACTIONS = [draw, hold]
 def deal \
 (deck: list[Card]) -> (State, State):
 
-    dealer = State([], 0, 0)
+    dealer = State([], 0, 0, 0)
     draw(deck, dealer, count=2)
     #making it an array incase I want to add spliting
-    player = [State([], 0, 0)]
+    player = [State([], 0, 0, 0)]
     draw(deck, player[0], count=2)
 
     return dealer, player
@@ -113,8 +115,10 @@ def ace_reduce \
     c_id = 0
     while state.total > 21 and c_id < len(state.cards):
         card = state.cards[c_id]
-        state.total -= 10 if card.value == 11 else 0 #BLACJACK HAX
-        card.value -= 10 if card.value == 11 else 0
+        is_ace = card.value == 11
+        state.total -= 10 if is_ace else 0 #BLACJACK HAX
+        card.value -= 10 if is_ace else 0
+        state.aces -= 1 if is_ace else 0
         c_id += 1
     return
 
@@ -180,7 +184,7 @@ def episode \
     if dealer.total < 21 and player[0].total < 21:
         plog = play_turn(deck, player_pi, player[0], ace_reduce)
         dealer.optotal = player[0].total
-        dlog = play_turn(deck, dealer_pi, dealer)
+        dlog = play_turn(deck, dealer_pi, dealer, ace_reduce)
     else:
         plog = []
         dlog = []
@@ -198,30 +202,45 @@ def episode \
     return result, plog, dlog
 
 
-COLORS = [(0xFF, 0x00, 0x00),   #hit = red
-          (0x00, 0x00, 0xFF),   #hold = blue
-          (0x00, 0x00, 0x00)]   #undefined=black 
+COLORS = [(0xFF, 0x00, 0x00),   #HIT = red
+          (0x00, 0x00, 0xFF),   #HOLD = blue
+          (0x00, 0x00, 0x00),   #HOLD with ace but HIT without = black   
+          (0x00, 0xFF, 0x00),   #HIT with ace but HOLD without = green
+          (0xFF, 0xFF, 0xFF)]   #undefined=white 
 
-
-#DO NOT PASS A TRAINING POLICY TO THIS!!
+"""NOTE: pt and dt are reversed for plotting reasons"""
 def visualize_policy \
 (policy: callable, ax=None):
 
-    color_grid = [[COLORS[2] for pt in range(22)] for dt in range(12)]
-    for dt in range(len(color_grid)):
-        for pt in range(len(color_grid[dt])):
+    action_grid = [[0 for pt in range(22)] for dt in range(12)]
+
+    for dt in range(len(action_grid)):
+        for pt in range(len(action_grid[dt])):
             cards = [Card(pt//2, 0), Card(pt - pt//2, 0)]
-            state: State = State(cards, pt, dt)
+            state: State = State(cards, pt, dt, 0)
             a = policy(state)
-            color_grid[dt][pt] = COLORS[a]
+            action_grid[dt][pt] = a
+
+
+    for dt in range(len(action_grid)):
+        for pt in range(12, 22):
+            cards = [Card(11, 0), Card(pt - 11, 0)]
+            state: State = State(cards, pt, dt, 1)
+            a = policy(state)
+            action_grid[dt][pt] += int(a != action_grid[dt][pt])*2 
+
     if ax is None:
-        plt.imshow(color_grid)
-        plt.xticks(np.arange(0, 22))
-        plt.yticks(np.arange(0, 12))
+        plt.imshow(color_grid, extent=[2,22,2,12])
+        plt.xticks(np.arange(2, 22))
+        plt.yticks(np.arange(2, 12))
         plt.show()
         return
-    ax.imshow(color_grid)
+    
+    color_grid = [[COLORS[action_grid[dt][pt]] for pt in range(22)] \
+            for dt in range(12)]
 
-    ax.set_xticks(np.arange(0, 22))
-    ax.set_yticks(np.arange(0, 12))
+    ax.imshow(color_grid, extent=[2,22,2,12])
 
+    ax.set_xticks(np.arange(2, 22))
+    ax.set_yticks(np.arange(2, 12))
+    
