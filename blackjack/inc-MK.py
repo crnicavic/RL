@@ -31,26 +31,25 @@ gains_matrix = list[list[list[float], list[float]]]
 def calculate_gains \
 (xp: XP_t, gamma=1) -> gains_matrix:
 
-    G = np.zeros((22, 12, len(ACTIONS), 0)).tolist()
+    G = np.zeros((22, 12, 2, len(ACTIONS), 0)).tolist()
     for ep in xp:
         g = 0
         for (state, a, r) in reversed(ep):
             #r is 0 if not terminal
             g += r 
-            G[state.total][state.optotal][a].append(g)
+            G[state.total][state.optotal][state.aces][a].append(g)
             g *= gamma
     return G
 
 q_matrix = list[list[list[float]]]
 def update_action_values \
-(pt: int, dt: int, Q: q_matrix, G: gains_matrix, alpha: float =0.1):
-
-    for a in range(len(ACTIONS)):
-        #hack that will bite me later
-        Q[pt][dt][a] = 0 if Q[pt][dt][a] == -np.inf else Q[pt][dt][a]
-        for g in G[pt][dt][a]:
-            Q[pt][dt][a] += alpha * (g - Q[pt][dt][a])
-
+(pt: int, dt: int, Q: q_matrix, G: gains_matrix, alpha=0.1):
+    #need 2 for loops to fix this :(
+    for aces in range(2):
+        for a in range(len(ACTIONS)):
+            for g in G[pt][dt][aces][a]:
+                q = Q[pt][dt][aces][a] 
+                Q[pt][dt][aces][a] = q + alpha * (g - q) 
 
 
 #i really wish for static to be a thing in python
@@ -67,7 +66,7 @@ def update_policy \
             return 1
         elif np.random.rand() < epsilon:
             return int(np.random.rand() < 0.5) if state.total < 21 else 1
-        return np.argmax(Q[state.total][state.optotal])
+        return np.argmax(Q[state.total][state.optotal][state.aces])
 
     return policy
 
@@ -77,7 +76,7 @@ def create_testing_policy \
     def policy(state: State):
         if state.total >= 21:
             return 1
-        return np.argmax(Q[state.total][state.optotal])
+        return np.argmax(Q[state.total][state.optotal][state.aces])
     return policy
 
 
@@ -85,7 +84,7 @@ def inc_mk \
 (maxiter=40, deckcount=9, gamecount=10000) -> (callable, list[float]):
 
     deck = deck_init(deckcount)
-    Q = np.zeros((22, 12, len(ACTIONS))).tolist()
+    Q = np.zeros((22, 12, 2, len(ACTIONS))).tolist()
     xp = []
     scores = []
     for _ in range(maxiter):
@@ -98,5 +97,5 @@ def inc_mk \
 fig, ax = plt.subplots(2)
 policy, scores = inc_mk(maxiter=10)
 visualize_policy(policy, ax[0])
-ax[1].plot(scores)
+ax[-1].plot(scores)
 plt.show()
