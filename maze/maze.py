@@ -454,12 +454,13 @@ def q_policy_iteration \
             new_pi[row][col] = direction(np.argmax(q[row][col]))
         return new_pi
 
-    q = [[[-10*np.random.rand()-1 for a in range(direction.TOTAL)] \
+    #IT WAS SO SIMPLE
+    q = [[[0 for a in range(direction.TOTAL)] \
             for col in range(len(board[row]))] for row in range(len(board))]
     pi = greedy_policy(board, q, gamma)
     it = 0
     while it < 1000:
-        q = evaluate_all(board, pi, q, gamma)
+        q = evaluate_pi(board, pi, q, gamma)
         new_pi = greedy_policy(board, q, gamma)
         if pi == new_pi:
             break
