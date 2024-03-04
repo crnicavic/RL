@@ -431,7 +431,7 @@ def q_policy_iteration \
         r = move(pos, a, board) 
         return r + gamma * q[pos.row][pos.col][pi[pos.row][pos.col]]
 
-    def explore_pi(board, pi, q, gamma=1):
+    def evaluate_all(board, pi, q, gamma=1):
         for (row, col), t in np.ndenumerate(board):
             q[row][col] = [ action_value(row, col, board, a, q, pi, gamma) \
                     for a in range(direction.TOTAL)]
@@ -455,7 +455,7 @@ def q_policy_iteration \
     pi = greedy_policy(board, q, gamma)
     it = 0
     while it < 1000:
-        q = explore_pi(board, pi, q, gamma)
+        q = evaluate_all(board, pi, q, gamma)
         new_pi = greedy_policy(board, q, gamma)
         if pi == new_pi:
             break
