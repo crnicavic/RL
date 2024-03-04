@@ -66,7 +66,7 @@ class position:
         self.col = col
         if board is None:
             return
-        """initial position is a wall fix"""
+        """position is a wall fix"""
         while(board[self.row][self.col] == cell_type.Wall):
             self.row += self.col == (len(board) - 1) if self.row < len(board) else 0 
             self.col = self.col + 1 if self.col+1 < len(board[self.row]) else 0 
@@ -129,7 +129,8 @@ def create_board \
         pos = position(row, col)
         
         new_row, new_col = np.random.randint(0, len(board), size=2)
-        """passing board prevents the coordiantes being a wall, hacky"""
+        """passing board also validates the position
+            if the position is a wall it moves it"""
         TELEPORTS[pos] = position(new_row, new_col, board)  
 
         """loop to find cyclic teleports"""
@@ -156,6 +157,7 @@ def create_board \
     return board
 
 
+"""board plot, vals is used to display numbers"""
 def draw_board \
 (board: Board, ax, pos: position = None, vals = None):
 
@@ -196,10 +198,12 @@ How range check works:
         + if n is odd, let's say 9, valid indices go from 0 to 8
           this check is simpler
 """
+def inrange(x, hi):
+    return abs(x - (hi - 1)/2) < hi/2
+
+
 def move \
 (pos: position, dir: direction, board: list[list[int]]) -> int:
-    def inrange(x, hi):
-        return abs(x - (hi - 1)/2) < hi/2
 
     new_pos = position(pos.row, pos.col)
     """if new pos is a valid position return it, otherwise old pos stays"""
